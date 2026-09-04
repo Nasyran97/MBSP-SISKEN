@@ -11,10 +11,12 @@
             </p>
         </div>
         
+        @if($canApplyPenyelenggaraan)
         <a href="{{ route('penyelenggaraan-add') }}"
            class="inline-flex items-center justify-center rounded-lg bg-brand-500 px-5 py-3 text-sm font-medium text-white hover:bg-brand-600">
             + Permohonan Penyelenggaraan
         </a>
+        @endif
     </div>
 
     <x-common.component-card title="Senarai Penyelenggaraan">
@@ -65,6 +67,9 @@
                                 'CANCELLED', 'CANCELED', 'BATAL' => 'status-cancelled',
                                 default => 'status-default',
                             };
+
+                            $createdBy = $row->CREATED_BY ?? $row->created_by ?? null;
+                            $canManageRow = $isSuperAdmin || ($createdBy && $createdBy === session('nostaff'));
                         @endphp
 
                         <tr>
@@ -133,14 +138,35 @@
                                         </svg>
                                     </button>
 
-                                    {{-- nanti aktifkan bila edit page siap --}}
-                                    {{--
-                                    <a href="{{ route('penyelenggaraan-edit', $id) }}"
-                                       class="action-btn edit-btn"
-                                       title="Edit">
-                                        Edit
-                                    </a>
-                                    --}}
+                                    @if($canManageRow)
+                                        <a href="{{ route('penyelenggaraan-edit', $id) }}"
+                                           class="action-btn edit-btn"
+                                           title="Edit">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M13.93 6.93L17.07 10.07M4 20H7.14L16.3 10.84C16.69 10.45 16.69 9.82 16.3 9.43L14.57 7.7C14.18 7.31 13.55 7.31 13.16 7.7L4 16.86V20Z"
+                                                      stroke="currentColor"
+                                                      stroke-width="1.8"
+                                                      stroke-linecap="round"
+                                                      stroke-linejoin="round" />
+                                            </svg>
+                                        </a>
+
+                                        <form method="POST" action="{{ route('penyelenggaraan-delete', $id) }}">
+                                            @csrf
+                                            <button type="submit"
+                                                    class="action-btn delete-btn"
+                                                    title="Delete"
+                                                    onclick="return confirm('Adakah anda pasti mahu padam permohonan penyelenggaraan ini?')">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                    <path d="M10 11V17M14 11V17M5 7H19M17 7L16.47 19.13C16.43 20.03 15.69 20.75 14.79 20.75H9.21C8.31 20.75 7.57 20.03 7.53 19.13L7 7M9 7V4.75C9 4.34 9.34 4 9.75 4H14.25C14.66 4 15 4.34 15 4.75V7"
+                                                          stroke="currentColor"
+                                                          stroke-width="1.8"
+                                                          stroke-linecap="round"
+                                                          stroke-linejoin="round" />
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
@@ -495,6 +521,11 @@
         white-space: nowrap;
     }
 
+    .action-btn-group form {
+        margin: 0;
+        display: inline-flex;
+    }
+
     .action-btn {
         width: 38px;
         height: 38px;
@@ -523,6 +554,12 @@
         background: #eff6ff;
         color: #1d4ed8;
         border-color: #bfdbfe;
+    }
+
+    .delete-btn {
+        background: #fef3f2;
+        color: #b42318;
+        border-color: #fecdca;
     }
 
     .penyelenggaraan-modal {

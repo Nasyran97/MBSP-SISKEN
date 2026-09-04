@@ -9,7 +9,14 @@ class PenyelenggaraanController extends Controller
 {
     public function list()
     {
-        $penyelenggaraan = DB::connection('oracle')
+        $currentUser = $this->getCurrentUser();
+
+        $isSuperAdmin = $this->isSuperAdminUser($currentUser);
+
+        $canApplyPenyelenggaraan = $isSuperAdmin
+            || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', 48);
+
+        $penyelenggaraanQuery = DB::connection('oracle')
             ->table('PENYELENGGARAAN_VEHICLE as pv')
             ->leftJoin('VEHICLE as v', 'v.ID', '=', 'pv.VEHICLE_ID')
             ->leftJoin('USERS as driver', 'driver.ID', '=', 'pv.DRIVER_ID')
@@ -34,6 +41,7 @@ class PenyelenggaraanController extends Controller
                 DB::raw('pv.LOCATION_NAME as "LOCATION_NAME"'),
                 DB::raw('pv.STATUS as "STATUS"'),
                 DB::raw('pv.STATUS_DATA as "STATUS_DATA"'),
+                DB::raw('pv.CREATED_BY as "CREATED_BY"'),
                 DB::raw('pv.CREATED_AT as "CREATED_AT"'),
 
                 DB::raw('v.NO_PLAT as "NO_PLAT"'),
@@ -50,13 +58,21 @@ class PenyelenggaraanController extends Controller
                 DB::raw('pic.NAMA as "PIC"'),
                 DB::raw('pic.NOSTAFF as "PIC_NOSTAFF"')
             )
-            ->whereRaw("UPPER(pv.STATUS_DATA) = 'ACTIVE'")
+            ->whereRaw("UPPER(pv.STATUS_DATA) = 'ACTIVE'");
+
+        if (!$isSuperAdmin) {
+            $penyelenggaraanQuery->where('pv.CREATED_BY', session('nostaff'));
+        }
+
+        $penyelenggaraan = $penyelenggaraanQuery
             ->orderBy('pv.ID', 'DESC')
             ->get();
 
         return view('pages.penyelenggaraan.penyelenggaraan-list', [
             'title' => 'Senarai Penyelenggaraan',
             'penyelenggaraan' => $penyelenggaraan,
+            'canApplyPenyelenggaraan' => $canApplyPenyelenggaraan,
+            'isSuperAdmin' => $isSuperAdmin,
         ]);
     }
 
@@ -68,73 +84,9 @@ class PenyelenggaraanController extends Controller
             abort(403, 'Anda tidak mempunyai akses untuk membuat permohonan penyelenggaraan.');
         }
 
-        $currentUserId = $currentUser->ID ?? $currentUser->id ?? null;
         $isSuperAdmin = $this->isSuperAdminUser($currentUser);
 
-        $vehicleQuery = DB::connection('oracle')
-            ->table('VEHICLE as v')
-            ->select(
-                DB::raw('v.ID as "ID"'),
-                DB::raw('v.NO_PLAT as "NO_PLAT"'),
-                DB::raw('v.JENIS_KENDERAAN as "JENIS_KENDERAAN"'),
-                DB::raw('v.BUATAN as "BUATAN"'),
-                DB::raw('v.MODEL as "MODEL"'),
-                DB::raw('v.LOKASI_PENEMPATAN as "LOKASI_PENEMPATAN"')
-            )
-            ->whereRaw("UPPER(v.STATUS_DATA) = 'ACTIVE'")
-            ->whereNotNull('v.NO_PLAT');
-
-        if (!$isSuperAdmin) {
-            $vehicleQuery->join('PENGAWAS_VEHICLE as p', function ($join) use ($currentUserId) {
-                $join->on('p.VEHICLE_ID', '=', 'v.ID')
-                    ->where('p.USER_ID', '=', $currentUserId)
-                    ->whereRaw("UPPER(p.STATUS_DATA) = 'ACTIVE'");
-            });
-        }
-
-        $vehicles = $vehicleQuery
-            ->orderBy('v.NO_PLAT')
-            ->get();
-
-        $drivers = DB::connection('oracle')
-            ->table('USERS as u')
-            ->select(
-                DB::raw('u.ID as "ID"'),
-                DB::raw('u.NOSTAFF as "NOSTAFF"'),
-                DB::raw('u.NAMA as "NAMA"'),
-                DB::raw('u.JABATAN as "JABATAN"'),
-                DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
-            )
-            ->whereNotNull('u.MODULE_ROLE')
-            ->whereRaw("
-                (
-                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == 65)')
-                    OR
-                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == \"65\")')
-                )
-            ")
-            ->orderBy('u.NAMA')
-            ->get();
-
-        $jkjgUsers = DB::connection('oracle')
-            ->table('USERS as u')
-            ->select(
-                DB::raw('u.ID as "ID"'),
-                DB::raw('u.NOSTAFF as "NOSTAFF"'),
-                DB::raw('u.NAMA as "NAMA"'),
-                DB::raw('u.JABATAN as "JABATAN"'),
-                DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
-            )
-            ->whereNotNull('u.MODULE_ROLE')
-            ->whereRaw("
-                (
-                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == 66)')
-                    OR
-                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == \"66\")')
-                )
-            ")
-            ->orderBy('u.NAMA')
-            ->get();
+        [$vehicles, $drivers, $jkjgUsers] = $this->getPenyelenggaraanFormOptions($currentUser, $isSuperAdmin);
 
         return view('pages.penyelenggaraan.penyelenggaraan-add', [
             'title' => 'Permohonan Penyelenggaraan',
@@ -142,6 +94,162 @@ class PenyelenggaraanController extends Controller
             'drivers' => $drivers,
             'jkjgUsers' => $jkjgUsers,
         ]);
+    }
+
+    public function edit($id)
+    {
+        $currentUser = $this->getCurrentUser();
+        $isSuperAdmin = $this->isSuperAdminUser($currentUser);
+
+        $penyelenggaraan = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->first();
+
+        if (!$penyelenggaraan) {
+            return redirect()
+                ->route('penyelenggaraan-list')
+                ->with('error', 'Rekod penyelenggaraan tidak dijumpai.');
+        }
+
+        $createdBy = $penyelenggaraan->CREATED_BY ?? $penyelenggaraan->created_by ?? null;
+
+        if (!$isSuperAdmin && $createdBy !== session('nostaff')) {
+            abort(403, 'Anda tidak mempunyai akses untuk mengemaskini permohonan ini.');
+        }
+
+        [$vehicles, $drivers, $jkjgUsers] = $this->getPenyelenggaraanFormOptions($currentUser, $isSuperAdmin);
+
+        return view('pages.penyelenggaraan.penyelenggaraan-edit', [
+            'title' => 'Kemaskini Permohonan Penyelenggaraan',
+            'penyelenggaraan' => $penyelenggaraan,
+            'vehicles' => $vehicles,
+            'drivers' => $drivers,
+            'jkjgUsers' => $jkjgUsers,
+        ]);
+    }
+
+    public function update(Request $request, $id)
+    {
+        $currentUser = $this->getCurrentUser();
+        $isSuperAdmin = $this->isSuperAdminUser($currentUser);
+
+        $penyelenggaraan = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->first();
+
+        if (!$penyelenggaraan) {
+            return redirect()
+                ->route('penyelenggaraan-list')
+                ->with('error', 'Rekod penyelenggaraan tidak dijumpai.');
+        }
+
+        $createdBy = $penyelenggaraan->CREATED_BY ?? $penyelenggaraan->created_by ?? null;
+
+        if (!$isSuperAdmin && $createdBy !== session('nostaff')) {
+            abort(403, 'Anda tidak mempunyai akses untuk mengemaskini permohonan ini.');
+        }
+
+        $request->validate([
+            'vehicle_id' => 'required',
+            'driver_id' => 'required',
+            'driver_phone_num' => 'nullable|string|max:30',
+            'jkjg_id' => 'required',
+            'odometer' => 'required|numeric|min:0',
+            'repair_category' => 'required|string|in:PENYELENGGARAAN,SERVIS,BREAKDOWN,PANCIT',
+            'repair_remark' => 'required|string',
+
+            'location_latitude' => 'nullable|required_if:repair_category,BREAKDOWN|numeric',
+            'location_longitude' => 'nullable|required_if:repair_category,BREAKDOWN|numeric',
+            'location_name' => 'nullable|required_if:repair_category,BREAKDOWN|string|max:500',
+        ], [
+            'vehicle_id.required' => 'Sila pilih no plat kenderaan.',
+            'driver_id.required' => 'Sila pilih pemandu.',
+            'odometer.required' => 'Sila masukkan odometer.',
+            'odometer.numeric' => 'Odometer mesti dalam format nombor.',
+            'jkjg_id.required' => 'Sila pilih JKJG.',
+            'repair_category.required' => 'Sila pilih jenis permohonan.',
+            'repair_category.in' => 'Jenis permohonan tidak sah.',
+            'repair_remark.required' => 'Sila masukkan keterangan kerosakan.',
+
+            'location_latitude.required_if' => 'Sila pilih lokasi breakdown pada peta.',
+            'location_longitude.required_if' => 'Sila pilih lokasi breakdown pada peta.',
+            'location_name.required_if' => 'Sila masukkan catatan lokasi breakdown.',
+        ]);
+
+        $repairCategory = strtoupper($request->repair_category);
+
+        $locationLatitude = $repairCategory === 'BREAKDOWN'
+            ? $request->location_latitude
+            : null;
+
+        $locationLongitude = $repairCategory === 'BREAKDOWN'
+            ? $request->location_longitude
+            : null;
+
+        $locationName = $repairCategory === 'BREAKDOWN'
+            ? $request->location_name
+            : null;
+
+        DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->update([
+                'VEHICLE_ID' => $request->vehicle_id,
+                'DRIVER_ID' => $request->driver_id,
+                'DRIVER_PHONE_NUM' => $request->driver_phone_num,
+                'ODOMETER' => $request->odometer,
+                'JKJG_ID' => $request->jkjg_id,
+                'REPAIR_CATEGORY' => $repairCategory,
+                'REPAIR_REMARK' => $request->repair_remark,
+                'LOCATION_LATITUDE' => $locationLatitude,
+                'LOCATION_LONGITUDE' => $locationLongitude,
+                'LOCATION_NAME' => $locationName,
+                'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
+                'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
+            ]);
+
+        return redirect()
+            ->route('penyelenggaraan-list')
+            ->with('success', 'Permohonan penyelenggaraan berjaya dikemaskini.');
+    }
+
+    public function delete($id)
+    {
+        $currentUser = $this->getCurrentUser();
+        $isSuperAdmin = $this->isSuperAdminUser($currentUser);
+
+        $penyelenggaraan = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->first();
+
+        if (!$penyelenggaraan) {
+            return back()->with('error', 'Rekod penyelenggaraan tidak dijumpai.');
+        }
+
+        $createdBy = $penyelenggaraan->CREATED_BY ?? $penyelenggaraan->created_by ?? null;
+
+        if (!$isSuperAdmin && $createdBy !== session('nostaff')) {
+            abort(403, 'Anda tidak mempunyai akses untuk memadam permohonan ini.');
+        }
+
+        $affected = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->update([
+                'STATUS_DATA' => 'DELETE',
+                'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
+                'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
+            ]);
+
+        if ($affected === 0) {
+            return back()->with('error', 'Tiada rekod aktif dijumpai untuk dipadam.');
+        }
+
+        return back()->with('success', 'Permohonan penyelenggaraan berjaya dipadam.');
     }
 
     public function store(Request $request)
@@ -224,6 +332,78 @@ class PenyelenggaraanController extends Controller
             ->with('success', 'Permohonan penyelenggaraan berjaya dihantar.');
     }
 
+    private function getPenyelenggaraanFormOptions($currentUser, $isSuperAdmin)
+    {
+        $currentUserId = $currentUser->ID ?? $currentUser->id ?? null;
+
+        $vehicleQuery = DB::connection('oracle')
+            ->table('VEHICLE as v')
+            ->select(
+                DB::raw('v.ID as "ID"'),
+                DB::raw('v.NO_PLAT as "NO_PLAT"'),
+                DB::raw('v.JENIS_KENDERAAN as "JENIS_KENDERAAN"'),
+                DB::raw('v.BUATAN as "BUATAN"'),
+                DB::raw('v.MODEL as "MODEL"'),
+                DB::raw('v.LOKASI_PENEMPATAN as "LOKASI_PENEMPATAN"')
+            )
+            ->whereRaw("UPPER(v.STATUS_DATA) = 'ACTIVE'")
+            ->whereNotNull('v.NO_PLAT');
+
+        if (!$isSuperAdmin) {
+            $vehicleQuery->join('PENGAWAS_VEHICLE as p', function ($join) use ($currentUserId) {
+                $join->on('p.VEHICLE_ID', '=', 'v.ID')
+                    ->where('p.USER_ID', '=', $currentUserId)
+                    ->whereRaw("UPPER(p.STATUS_DATA) = 'ACTIVE'");
+            });
+        }
+
+        $vehicles = $vehicleQuery
+            ->orderBy('v.NO_PLAT')
+            ->get();
+
+        $drivers = DB::connection('oracle')
+            ->table('USERS as u')
+            ->select(
+                DB::raw('u.ID as "ID"'),
+                DB::raw('u.NOSTAFF as "NOSTAFF"'),
+                DB::raw('u.NAMA as "NAMA"'),
+                DB::raw('u.JABATAN as "JABATAN"'),
+                DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
+            )
+            ->whereNotNull('u.MODULE_ROLE')
+            ->whereRaw("
+                (
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == 65)')
+                    OR
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == \"65\")')
+                )
+            ")
+            ->orderBy('u.NAMA')
+            ->get();
+
+        $jkjgUsers = DB::connection('oracle')
+            ->table('USERS as u')
+            ->select(
+                DB::raw('u.ID as "ID"'),
+                DB::raw('u.NOSTAFF as "NOSTAFF"'),
+                DB::raw('u.NAMA as "NAMA"'),
+                DB::raw('u.JABATAN as "JABATAN"'),
+                DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
+            )
+            ->whereNotNull('u.MODULE_ROLE')
+            ->whereRaw("
+                (
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == 66)')
+                    OR
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == \"66\")')
+                )
+            ")
+            ->orderBy('u.NAMA')
+            ->get();
+
+        return [$vehicles, $drivers, $jkjgUsers];
+    }
+
     private function getCurrentUser()
 {
     $nostaff = session('nostaff');
@@ -270,7 +450,7 @@ private function hasUserModuleRole($user, $moduleName, $roleId)
 private function canCreatePenyelenggaraan($user)
 {
     return $this->hasUserModuleRole($user, 'SUPERADMIN', 1)
-        || $this->hasUserModuleRole($user, 'PENYELENGGARAAN', 61);
+        || $this->hasUserModuleRole($user, 'PENYELENGGARAAN', 48);
 }
 
 private function isSuperAdminUser($user)

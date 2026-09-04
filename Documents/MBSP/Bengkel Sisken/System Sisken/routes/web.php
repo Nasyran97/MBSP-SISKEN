@@ -15,6 +15,7 @@ use App\Http\Controllers\MahkamahController;
 use App\Http\Controllers\LupusController;
 use App\Http\Controllers\InsuransStatistikController;
 use App\Http\Controllers\PenyelenggaraanController;
+use App\Http\Controllers\ImpersonateController;
 
 
 // dashboard pages
@@ -274,11 +275,17 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::get('/statistik-data-display', [InsuransStatistikController::class, 'statistikDataDisplay'])->name('statistik-data-display');
 
 
-    //PENYELENGGARAAN KENDERAAN 
+    //PENYELENGGARAAN KENDERAAN
     Route::get('/penyelenggaraan-list', [PenyelenggaraanController::class, 'list'])->name('penyelenggaraan-list');
     Route::get('/penyelenggaraan-add', [PenyelenggaraanController::class, 'create'])->name('penyelenggaraan-add');
     Route::post('/penyelenggaraan-store', [PenyelenggaraanController::class, 'store'])->name('penyelenggaraan-store');
+    Route::get('/penyelenggaraan/{id}/edit', [PenyelenggaraanController::class, 'edit'])->name('penyelenggaraan-edit');
+    Route::put('/penyelenggaraan/{id}/update', [PenyelenggaraanController::class, 'update'])->name('penyelenggaraan-update');
+    Route::post('/penyelenggaraan/{id}/delete', [PenyelenggaraanController::class, 'delete'])->name('penyelenggaraan-delete');
 
+    //MOD UJIAN (SUPERADMIN) - TUKAR AKAUN UNTUK TESTING
+    Route::post('/impersonate/start', [ImpersonateController::class, 'start'])->name('impersonate-start');
+    Route::post('/impersonate/stop', [ImpersonateController::class, 'stop'])->name('impersonate-stop');
 
 });
 

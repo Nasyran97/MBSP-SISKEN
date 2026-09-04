@@ -260,7 +260,7 @@ class MenuHelper
                 'name' => 'Penyelenggaraan Kenderaan',
                 'subItems' => [
                     ['name' => 'Senarai Penyelenggaraan', 'path' => '/penyelenggaraan-list', 'pro' => false],
-                    ['name' => 'Permohonan Penyelenggaraan', 'path' => '/penyelenggaraan-add', 'pro' => false],
+                    // ['name' => 'Permohonan Penyelenggaraan', 'path' => '/penyelenggaraan-add', 'pro' => false],
                 ],
             ],
         ];
