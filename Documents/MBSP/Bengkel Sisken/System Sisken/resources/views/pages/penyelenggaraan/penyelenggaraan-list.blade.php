@@ -20,6 +20,13 @@
     </div>
 
     <x-common.component-card title="Senarai Penyelenggaraan">
+        <div class="penyelenggaraan-tabs">
+            <button type="button" class="tab-btn active" data-status-tab="PENDING">Pending</button>
+            <button type="button" class="tab-btn" data-status-tab="PROGRESS">Dalam Proses</button>
+            <button type="button" class="tab-btn" data-status-tab="COMPLETED">Selesai</button>
+            <button type="button" class="tab-btn" data-status-tab="CANCELLED">Batal</button>
+        </div>
+
         <div class="p-1 overflow-x-auto">
             <table id="penyelenggaraanTable" class="user-table penyelenggaraan-table">
                 <thead>
@@ -58,7 +65,12 @@
                             $kategori = $row->REPAIR_CATEGORY ?? $row->repair_category ?? '-';
                             $remark = $row->REPAIR_REMARK ?? $row->repair_remark ?? '-';
 
-                            $status = strtoupper(trim($row->STATUS ?? $row->status ?? 'PENDING'));
+                            $statusData = strtoupper(trim($row->STATUS_DATA ?? $row->status_data ?? 'ACTIVE'));
+                            $isDeletedRow = $statusData === 'DELETE';
+
+                            $status = $isDeletedRow
+                                ? 'BATAL'
+                                : strtoupper(trim($row->STATUS ?? $row->status ?? 'PENDING'));
 
                             $statusClass = match($status) {
                                 'PENDING' => 'status-pending',
@@ -69,7 +81,9 @@
                             };
 
                             $createdBy = $row->CREATED_BY ?? $row->created_by ?? null;
-                            $canManageRow = $isSuperAdmin || ($createdBy && $createdBy === session('nostaff'));
+                            $canManageRow = !$isDeletedRow
+                                && ($isSuperAdmin || ($createdBy && $createdBy === session('nostaff')));
+                            $canEditRow = $canManageRow && $status === 'PENDING';
                         @endphp
 
                         <tr>
@@ -109,7 +123,7 @@
 
                             <td>
                                 <span class="category-badge">
-                                    {{ $kategori }}
+                                    {{ str_replace('_', ' ', $kategori) }}
                                 </span>
                             </td>
 
@@ -138,7 +152,25 @@
                                         </svg>
                                     </button>
 
-                                    @if($canManageRow)
+                                    @if($canAcceptPenyelenggaraan && $status === 'PENDING')
+                                        <form method="POST" action="{{ route('penyelenggaraan-accept', $id) }}">
+                                            @csrf
+                                            <button type="submit"
+                                                    class="action-btn terima-btn"
+                                                    title="Terima"
+                                                    onclick="return confirm('Adakah anda pasti mahu terima permohonan penyelenggaraan ini?')">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                    <path d="M5 12L10 17L19 8"
+                                                          stroke="currentColor"
+                                                          stroke-width="1.8"
+                                                          stroke-linecap="round"
+                                                          stroke-linejoin="round" />
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    @endif
+
+                                    @if($canEditRow)
                                         <a href="{{ route('penyelenggaraan-edit', $id) }}"
                                            class="action-btn edit-btn"
                                            title="Edit">
@@ -150,7 +182,9 @@
                                                       stroke-linejoin="round" />
                                             </svg>
                                         </a>
+                                    @endif
 
+                                    @if($canManageRow)
                                         <form method="POST" action="{{ route('penyelenggaraan-delete', $id) }}">
                                             @csrf
                                             <button type="submit"
@@ -205,7 +239,11 @@
             $repairCategory = strtoupper(trim($kategori));
 
             $remark = $row->REPAIR_REMARK ?? $row->repair_remark ?? '-';
-            $status = strtoupper(trim($row->STATUS ?? $row->status ?? 'PENDING'));
+
+            $statusData = strtoupper(trim($row->STATUS_DATA ?? $row->status_data ?? 'ACTIVE'));
+            $status = $statusData === 'DELETE'
+                ? 'BATAL'
+                : strtoupper(trim($row->STATUS ?? $row->status ?? 'PENDING'));
 
             $locationLatitude = $row->LOCATION_LATITUDE ?? $row->location_latitude ?? null;
             $locationLongitude = $row->LOCATION_LONGITUDE ?? $row->location_longitude ?? null;
@@ -311,7 +349,7 @@
 
                     <div>
                         <span>Kategori</span>
-                        <strong>{{ $kategori }}</strong>
+                        <strong>{{ str_replace('_', ' ', $kategori) }}</strong>
                     </div>
 
                     <div>
@@ -359,6 +397,59 @@
 </div>
 
 <style>
+    .penyelenggaraan-tabs {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px;
+        margin: 0 0 16px;
+        background: #f8f9fb;
+        border: 1px solid #eef1f4;
+        border-radius: 12px;
+        width: fit-content;
+    }
+
+    .penyelenggaraan-tabs .tab-btn {
+        border: none;
+        background: transparent;
+        color: #667085;
+        font-size: 13px;
+        font-weight: 600;
+        padding: 9px 18px;
+        border-radius: 9px;
+        cursor: pointer;
+        transition: all .15s ease;
+    }
+
+    .penyelenggaraan-tabs .tab-btn:hover {
+        color: #344054;
+    }
+
+    .penyelenggaraan-tabs .tab-btn.active {
+        background: #ffffff;
+        box-shadow: 0 1px 3px rgba(16, 24, 40, 0.12);
+    }
+
+    .penyelenggaraan-tabs .tab-btn[data-status-tab="PENDING"].active {
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+
+    .penyelenggaraan-tabs .tab-btn[data-status-tab="PROGRESS"].active {
+        background: #fffaeb;
+        color: #b54708;
+    }
+
+    .penyelenggaraan-tabs .tab-btn[data-status-tab="COMPLETED"].active {
+        background: #ecfdf3;
+        color: #027a48;
+    }
+
+    .penyelenggaraan-tabs .tab-btn[data-status-tab="CANCELLED"].active {
+        background: #fef3f2;
+        color: #b42318;
+    }
+
     .user-table {
         width: 100% !important;
         border-collapse: separate;
@@ -367,7 +458,7 @@
     }
 
     .penyelenggaraan-table {
-        min-width: 1750px;
+        min-width: 1820px;
         table-layout: fixed;
     }
 
@@ -452,7 +543,7 @@
 
     .penyelenggaraan-table th:nth-child(11),
     .penyelenggaraan-table td:nth-child(11) {
-        width: 120px !important;
+        width: 190px !important;
         text-align: center;
     }
 
@@ -515,10 +606,10 @@
 
     .action-btn-group {
         display: flex;
+        flex-wrap: wrap;
         justify-content: center;
         align-items: center;
-        gap: 8px;
-        white-space: nowrap;
+        gap: 6px;
     }
 
     .action-btn-group form {
@@ -527,9 +618,9 @@
     }
 
     .action-btn {
-        width: 38px;
-        height: 38px;
-        border-radius: 10px;
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -554,6 +645,12 @@
         background: #eff6ff;
         color: #1d4ed8;
         border-color: #bfdbfe;
+    }
+
+    .terima-btn {
+        background: #ecfdf3;
+        color: #027a48;
+        border-color: #abefc6;
     }
 
     .delete-btn {
@@ -646,7 +743,7 @@
 
     .dataTables_scrollHeadInner table.penyelenggaraan-table,
     .dataTables_scrollBody table.penyelenggaraan-table {
-        min-width: 1750px !important;
+        min-width: 1820px !important;
     }
 
     .breakdown-modal-map {
@@ -797,7 +894,7 @@ $(document).ready(function () {
         scrollCollapse: true,
 
         columns: [
-            { width: '60px' },
+            { width: '60px', orderable: false, searchable: false },
             { width: '130px' },
             { width: '240px' },
             { width: '140px' },
@@ -807,7 +904,7 @@ $(document).ready(function () {
             { width: '180px' },
             { width: '300px' },
             { width: '150px' },
-            { width: '120px', orderable: false }
+            { width: '190px', orderable: false }
         ],
 
         language: {
@@ -828,8 +925,44 @@ $(document).ready(function () {
 
         initComplete: function () {
             this.api().columns.adjust();
+        },
+
+        drawCallback: function () {
+            this.api()
+                .column(0, { search: 'applied', order: 'applied' })
+                .nodes()
+                .each(function (cell, i) {
+                    cell.innerHTML = i + 1;
+                });
         }
     });
+
+    const statusTabPatterns = {
+        PENDING: '\\bPENDING\\b',
+        PROGRESS: '\\b(IN PROGRESS|IN_PROGRESS|DALAM PROSES)\\b',
+        COMPLETED: '\\b(COMPLETED|COMPLETE|SELESAI)\\b',
+        CANCELLED: '\\b(CANCELLED|CANCELED|BATAL)\\b'
+    };
+
+    function applyStatusTab(tab) {
+        penyelenggaraanTable
+            .column(9)
+            .search(statusTabPatterns[tab] || '', true, false)
+            .draw();
+    }
+
+    document.querySelectorAll('.penyelenggaraan-tabs .tab-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            document.querySelectorAll('.penyelenggaraan-tabs .tab-btn').forEach(function (b) {
+                b.classList.remove('active');
+            });
+
+            this.classList.add('active');
+            applyStatusTab(this.dataset.statusTab);
+        });
+    });
+
+    applyStatusTab('PENDING');
 
     setTimeout(function () {
         penyelenggaraanTable.columns.adjust().draw(false);

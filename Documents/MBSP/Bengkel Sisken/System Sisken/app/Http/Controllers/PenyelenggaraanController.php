@@ -16,6 +16,9 @@ class PenyelenggaraanController extends Controller
         $canApplyPenyelenggaraan = $isSuperAdmin
             || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', 48);
 
+        $canAcceptPenyelenggaraan = $isSuperAdmin
+            || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', 49);
+
         $penyelenggaraanQuery = DB::connection('oracle')
             ->table('PENYELENGGARAAN_VEHICLE as pv')
             ->leftJoin('VEHICLE as v', 'v.ID', '=', 'pv.VEHICLE_ID')
@@ -58,9 +61,9 @@ class PenyelenggaraanController extends Controller
                 DB::raw('pic.NAMA as "PIC"'),
                 DB::raw('pic.NOSTAFF as "PIC_NOSTAFF"')
             )
-            ->whereRaw("UPPER(pv.STATUS_DATA) = 'ACTIVE'");
+            ->whereRaw("UPPER(pv.STATUS_DATA) IN ('ACTIVE', 'DELETE')");
 
-        if (!$isSuperAdmin) {
+        if (!$isSuperAdmin && !$canAcceptPenyelenggaraan) {
             $penyelenggaraanQuery->where('pv.CREATED_BY', session('nostaff'));
         }
 
@@ -72,6 +75,7 @@ class PenyelenggaraanController extends Controller
             'title' => 'Senarai Penyelenggaraan',
             'penyelenggaraan' => $penyelenggaraan,
             'canApplyPenyelenggaraan' => $canApplyPenyelenggaraan,
+            'canAcceptPenyelenggaraan' => $canAcceptPenyelenggaraan,
             'isSuperAdmin' => $isSuperAdmin,
         ]);
     }
@@ -118,6 +122,14 @@ class PenyelenggaraanController extends Controller
             abort(403, 'Anda tidak mempunyai akses untuk mengemaskini permohonan ini.');
         }
 
+        $status = strtoupper(trim($penyelenggaraan->STATUS ?? $penyelenggaraan->status ?? ''));
+
+        if ($status !== 'PENDING') {
+            return redirect()
+                ->route('penyelenggaraan-list')
+                ->with('error', 'Permohonan ini tidak lagi berstatus pending dan tidak boleh dikemaskini.');
+        }
+
         [$vehicles, $drivers, $jkjgUsers] = $this->getPenyelenggaraanFormOptions($currentUser, $isSuperAdmin);
 
         return view('pages.penyelenggaraan.penyelenggaraan-edit', [
@@ -151,13 +163,21 @@ class PenyelenggaraanController extends Controller
             abort(403, 'Anda tidak mempunyai akses untuk mengemaskini permohonan ini.');
         }
 
+        $status = strtoupper(trim($penyelenggaraan->STATUS ?? $penyelenggaraan->status ?? ''));
+
+        if ($status !== 'PENDING') {
+            return redirect()
+                ->route('penyelenggaraan-list')
+                ->with('error', 'Permohonan ini tidak lagi berstatus pending dan tidak boleh dikemaskini.');
+        }
+
         $request->validate([
             'vehicle_id' => 'required',
             'driver_id' => 'required',
             'driver_phone_num' => 'nullable|string|max:30',
             'jkjg_id' => 'required',
             'odometer' => 'required|numeric|min:0',
-            'repair_category' => 'required|string|in:PENYELENGGARAAN,SERVIS,BREAKDOWN,PANCIT',
+            'repair_category' => 'required|string|in:PEMBAIKAN_BERAT,PEMBAIKAN_RINGAN,SERVIS,BREAKDOWN,KIMPALAN,PANCIT,AIRCOND',
             'repair_remark' => 'required|string',
 
             'location_latitude' => 'nullable|required_if:repair_category,BREAKDOWN|numeric',
@@ -215,6 +235,35 @@ class PenyelenggaraanController extends Controller
             ->with('success', 'Permohonan penyelenggaraan berjaya dikemaskini.');
     }
 
+    public function expirePendingRequests()
+    {
+        $now = now('Asia/Kuala_Lumpur');
+        $cutoff = $now->copy()->setTime(17, 0, 0);
+
+        if ($now->lt($cutoff)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Proses ini hanya boleh dijalankan selepas pukul 5:00 PM.',
+            ]);
+        }
+
+        $expired = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->whereRaw("UPPER(STATUS) = 'PENDING'")
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->update([
+                'STATUS_DATA' => 'DELETE',
+                'UPDATED_BY' => 'SYSTEM',
+                'UPDATED_AT' => $now,
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Permohonan penyelenggaraan yang masih pending selepas 5:00 PM berjaya dipadam.',
+            'expired' => $expired,
+        ]);
+    }
+
     public function delete($id)
     {
         $currentUser = $this->getCurrentUser();
@@ -252,6 +301,50 @@ class PenyelenggaraanController extends Controller
         return back()->with('success', 'Permohonan penyelenggaraan berjaya dipadam.');
     }
 
+    public function accept($id)
+    {
+        $currentUser = $this->getCurrentUser();
+        $isSuperAdmin = $this->isSuperAdminUser($currentUser);
+
+        $canAccept = $isSuperAdmin
+            || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', 49);
+
+        if (!$canAccept) {
+            abort(403, 'Anda tidak mempunyai akses untuk menerima permohonan ini.');
+        }
+
+        $penyelenggaraan = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->first();
+
+        if (!$penyelenggaraan) {
+            return back()->with('error', 'Rekod penyelenggaraan tidak dijumpai.');
+        }
+
+        $status = strtoupper(trim($penyelenggaraan->STATUS ?? $penyelenggaraan->status ?? ''));
+
+        if ($status !== 'PENDING') {
+            return back()->with('error', 'Permohonan ini bukan dalam status pending.');
+        }
+
+        $affected = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->update([
+                'STATUS' => 'IN PROGRESS',
+                'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
+                'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
+            ]);
+
+        if ($affected === 0) {
+            return back()->with('error', 'Tiada rekod aktif dijumpai untuk dikemaskini.');
+        }
+
+        return back()->with('success', 'Permohonan penyelenggaraan berjaya diterima.');
+    }
+
     public function store(Request $request)
     {
         $currentUser = $this->getCurrentUser();
@@ -269,7 +362,7 @@ class PenyelenggaraanController extends Controller
             'driver_phone_num' => 'nullable|string|max:30',
             'jkjg_id' => 'required',
             'odometer' => 'required|numeric|min:0',
-            'repair_category' => 'required|string|in:PENYELENGGARAAN,SERVIS,BREAKDOWN,PANCIT',
+            'repair_category' => 'required|string|in:PEMBAIKAN_BERAT,PEMBAIKAN_RINGAN,SERVIS,BREAKDOWN,KIMPALAN,PANCIT,AIRCOND',
             'repair_remark' => 'required|string',
 
         

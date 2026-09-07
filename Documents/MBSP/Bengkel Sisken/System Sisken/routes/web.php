@@ -282,6 +282,7 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::get('/penyelenggaraan/{id}/edit', [PenyelenggaraanController::class, 'edit'])->name('penyelenggaraan-edit');
     Route::put('/penyelenggaraan/{id}/update', [PenyelenggaraanController::class, 'update'])->name('penyelenggaraan-update');
     Route::post('/penyelenggaraan/{id}/delete', [PenyelenggaraanController::class, 'delete'])->name('penyelenggaraan-delete');
+    Route::post('/penyelenggaraan/{id}/accept', [PenyelenggaraanController::class, 'accept'])->name('penyelenggaraan-accept');
 
     //MOD UJIAN (SUPERADMIN) - TUKAR AKAUN UNTUK TESTING
     Route::post('/impersonate/start', [ImpersonateController::class, 'start'])->name('impersonate-start');

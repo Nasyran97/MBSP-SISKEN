@@ -156,10 +156,13 @@
                     <label>Jenis Permohonan</label>
                     <select name="repair_category" id="repair_category" required>
                         <option value="" disabled>-- Sila Pilih Jenis Permohonan --</option>
-                        <option value="PENYELENGGARAAN" {{ $selectedRepairCategory == 'PENYELENGGARAAN' ? 'selected' : '' }}>Penyelenggaraan</option>
+                        <option value="PEMBAIKAN_BERAT" {{ $selectedRepairCategory == 'PEMBAIKAN_BERAT' ? 'selected' : '' }}>Pembaikan Berat</option>
+                        <option value="PEMBAIKAN_RINGAN" {{ $selectedRepairCategory == 'PEMBAIKAN_RINGAN' ? 'selected' : '' }}>Pembaikan Ringan</option>
                         <option value="SERVIS" {{ $selectedRepairCategory == 'SERVIS' ? 'selected' : '' }}>Servis</option>
                         <option value="BREAKDOWN" {{ $selectedRepairCategory == 'BREAKDOWN' ? 'selected' : '' }}>Breakdown</option>
+                        <option value="KIMPALAN" {{ $selectedRepairCategory == 'KIMPALAN' ? 'selected' : '' }}>Kimpalan</option>
                         <option value="PANCIT" {{ $selectedRepairCategory == 'PANCIT' ? 'selected' : '' }}>Pancit</option>
+                        <option value="AIRCOND" {{ $selectedRepairCategory == 'AIRCOND' ? 'selected' : '' }}>Aircond</option>
                     </select>
 
                     @error('repair_category')
