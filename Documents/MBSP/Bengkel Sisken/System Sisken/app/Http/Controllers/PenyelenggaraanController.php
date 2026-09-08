@@ -264,6 +264,28 @@ class PenyelenggaraanController extends Controller
         ]);
     }
 
+    public function completePancitRequests()
+    {
+        $now = now('Asia/Kuala_Lumpur');
+
+        $completed = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->whereRaw("UPPER(STATUS) = 'IN PROGRESS'")
+            ->whereRaw("UPPER(REPAIR_CATEGORY) = 'PANCIT'")
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->update([
+                'STATUS' => 'COMPLETED',
+                'UPDATED_BY' => 'SYSTEM',
+                'UPDATED_AT' => $now,
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Permohonan penyelenggaraan PANCIT dalam proses berjaya ditukar ke status selesai.',
+            'completed' => $completed,
+        ]);
+    }
+
     public function delete($id)
     {
         $currentUser = $this->getCurrentUser();

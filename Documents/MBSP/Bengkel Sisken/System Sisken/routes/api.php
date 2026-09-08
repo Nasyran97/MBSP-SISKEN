@@ -13,3 +13,5 @@ Route::get('/roadtax/update-status', [RoadtaxController::class, 'updateRoadtaxSt
 Route::get('/kenderaan/update-department', [KenderaanController::class, 'updateDepartment']);  //update department name based on depCode
 
 Route::get('/penyelenggaraan/expire-pending', [PenyelenggaraanController::class, 'expirePendingRequests']);  //must run daily - after 5pm, auto delete penyelenggaraan requests still PENDING
+
+Route::get('/penyelenggaraan/complete-pancit', [PenyelenggaraanController::class, 'completePancitRequests']);  //must run daily - auto complete PANCIT requests still dalam proses (IN PROGRESS)

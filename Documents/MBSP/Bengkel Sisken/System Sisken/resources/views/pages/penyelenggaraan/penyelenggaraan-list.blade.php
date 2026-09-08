@@ -84,6 +84,7 @@
                             $canManageRow = !$isDeletedRow
                                 && ($isSuperAdmin || ($createdBy && $createdBy === session('nostaff')));
                             $canEditRow = $canManageRow && $status === 'PENDING';
+                            $canDeleteRow = $canManageRow && !in_array($status, ['COMPLETED', 'COMPLETE', 'SELESAI']);
                         @endphp
 
                         <tr>
@@ -184,7 +185,7 @@
                                         </a>
                                     @endif
 
-                                    @if($canManageRow)
+                                    @if($canDeleteRow)
                                         <form method="POST" action="{{ route('penyelenggaraan-delete', $id) }}">
                                             @csrf
                                             <button type="submit"
