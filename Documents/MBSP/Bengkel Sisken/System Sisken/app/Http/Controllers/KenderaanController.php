@@ -13,7 +13,7 @@ use Throwable;
 
 class KenderaanController extends Controller
 {
-    public function carList()
+    private function checkCarListAccess()
     {
         $nostaff = session('nostaff');
 
@@ -44,8 +44,11 @@ class KenderaanController extends Controller
         if (!in_array('SUPERADMIN', $allowedModules) && !in_array('INSURANS', $allowedModules)) {
             abort(403, 'Anda tidak mempunyai akses ke modul ini.');
         }
+    }
 
-        $cars = DB::connection('oracle')
+    private function getCarList()
+    {
+        return DB::connection('oracle')
             ->table('VEHICLE as v')
             ->leftJoin('PENGAWAS_VEHICLE as p', function ($join) {
                 $join->on('p.VEHICLE_ID', '=', 'v.ID')
@@ -93,12 +96,102 @@ class KenderaanController extends Controller
             ->whereRaw("UPPER(v.STATUS_DATA) = 'ACTIVE'")
             ->orderBy('v.ID', 'DESC')
             ->get();
+    }
 
-        // dd($cars->first());
+    public function carList()
+    {
+        $this->checkCarListAccess();
+
+        $cars = $this->getCarList();
 
         return view('pages.kenderaan.rekod-car-list', [
             'title' => 'Senarai Kenderaan',
             'cars' => $cars,
+        ]);
+    }
+
+    public function exportCarList()
+    {
+        $this->checkCarListAccess();
+
+        $cars = $this->getCarList();
+
+        $formatDate = function ($date) {
+            if (!$date) {
+                return '-';
+            }
+
+            try {
+                return Carbon::parse($date)->format('d/m/Y');
+            } catch (\Exception $e) {
+                return '-';
+            }
+        };
+
+        $headers = [
+            'No Plat',
+            'Buatan',
+            'Model',
+            'Jabatan',
+            'Kod Jabatan',
+            'Jenis Bahan Bakar',
+            'Tahun Dibuat',
+            'Jenis Badan',
+            'Keupayaan Enjin',
+            'No Chasis',
+            'No Enjin',
+            'Kelas Kegunaan',
+            'Jenis Kenderaan',
+            'Lokasi Penempatan',
+            'Pengawas Kenderaan',
+            'Tarikh Pendaftaran',
+            'Kelas Kenderaan',
+            'Nama Pembekal',
+            'Alamat Pembekal',
+            'Tarikh Beli',
+            'Harga Beli',
+        ];
+
+        $filename = 'senarai-kenderaan-' . now()->format('Ymd_His') . '.csv';
+
+        $callback = function () use ($cars, $headers, $formatDate) {
+            $handle = fopen('php://output', 'w');
+
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, $headers);
+
+            foreach ($cars as $car) {
+                fputcsv($handle, [
+                    $car->NO_PLAT ?? $car->no_plat ?? '-',
+                    $car->BUATAN ?? $car->buatan ?? '-',
+                    $car->MODEL ?? $car->model ?? '-',
+                    $car->JABATAN ?? $car->jabatan ?? '-',
+                    $car->KOD_JABATAN ?? $car->kod_jabatan ?? '-',
+                    $car->JENIS_BAHAN_BAKAR ?? $car->jenis_bahan_bakar ?? '-',
+                    $car->TAHUN_DIBUAT ?? $car->tahun_dibuat ?? '-',
+                    $car->JENIS_BADAN ?? $car->jenis_badan ?? '-',
+                    $car->KEUPAYAAN_ENJIN ?? $car->keupayaan_enjin ?? '-',
+                    $car->NO_CHASIS ?? $car->no_chasis ?? '-',
+                    $car->NO_ENJIN ?? $car->no_enjin ?? '-',
+                    $car->KELAS_KEGUNAAN ?? $car->kelas_kegunaan ?? '-',
+                    $car->JENIS_KENDERAAN ?? $car->jenis_kenderaan ?? '-',
+                    $car->LOKASI_PENEMPATAN ?? $car->lokasi_penempatan ?? '-',
+                    $car->PENGAWAS_KENDERAAN ?? $car->pengawas_kenderaan ?? '-',
+                    $formatDate($car->TARIKH_PENDAFTARAN ?? $car->tarikh_pendaftaran ?? null),
+                    $car->KELAS_KENDERAAN ?? $car->kelas_kenderaan ?? '-',
+                    $car->NAMA_PEMBEKAL ?? $car->nama_pembekal ?? '-',
+                    $car->ALAMAT_PEMBEKAL ?? $car->alamat_pembekal ?? '-',
+                    $formatDate($car->TARIKH_BELI ?? $car->tarikh_beli ?? null),
+                    $car->HARGA_BELI ?? $car->harga_beli ?? '-',
+                ]);
+            }
+
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
         ]);
     }
 
@@ -127,9 +220,26 @@ class KenderaanController extends Controller
         }
 
         $pengawas = DB::connection('oracle')
-            ->table('PENGAWAS_VEHICLE')
-            ->where('status_data', 'ACTIVE')
-            ->orderBy('nama')
+            ->table('USERS as u')
+            ->select(
+                DB::raw('u.ID as "ID"'),
+                DB::raw('u.NOSTAFF as "NOSTAFF"'),
+                DB::raw('u.NAMA as "NAMA"'),
+                DB::raw('u.JABATAN as "JABATAN"'),
+                DB::raw('u.KOD_JABATAN as "KOD_JABATAN"'),
+                DB::raw('u.EMAIL as "EMAIL"'),
+                DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
+            )
+            ->whereNotNull('u.MODULE_ROLE')
+            ->whereRaw("
+                (
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"ENGINEERING\" && @.role == 48)')
+                    OR
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"ENGINEERING\" && @.role == \"48\")')
+                )
+            ")
+            ->whereRaw("(UPPER(u.STATUS_DATA) = 'ACTIVE' OR u.STATUS_DATA IS NULL)")
+            ->orderBy('u.NAMA')
             ->get();
 
         $jenisBadan = DB::connection('oracle')
@@ -281,10 +391,37 @@ class KenderaanController extends Controller
         }
 
         $pengawas = DB::connection('oracle')
-            ->table('PENGAWAS_VEHICLE')
-            ->where('status_data', 'ACTIVE')
-            ->orderBy('nama')
+            ->table('USERS as u')
+            ->select(
+                DB::raw('u.ID as "ID"'),
+                DB::raw('u.NOSTAFF as "NOSTAFF"'),
+                DB::raw('u.NAMA as "NAMA"'),
+                DB::raw('u.JABATAN as "JABATAN"'),
+                DB::raw('u.KOD_JABATAN as "KOD_JABATAN"'),
+                DB::raw('u.EMAIL as "EMAIL"'),
+                DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
+            )
+            ->whereNotNull('u.MODULE_ROLE')
+            ->whereRaw("
+                (
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"ENGINEERING\" && @.role == 48)')
+                    OR
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"ENGINEERING\" && @.role == \"48\")')
+                )
+            ")
+            ->whereRaw("(UPPER(u.STATUS_DATA) = 'ACTIVE' OR u.STATUS_DATA IS NULL)")
+            ->orderBy('u.NAMA')
             ->get();
+
+        $selectedPengawasIds = DB::connection('oracle')
+            ->table('PENGAWAS_VEHICLE')
+            ->where('VEHICLE_ID', $id)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->pluck('USER_ID')
+            ->map(function ($value) {
+                return (string) $value;
+            })
+            ->toArray();
 
         $jenisBadan = DB::connection('oracle')
             ->table('VEHICLE_JENIS_BADAN')
@@ -329,6 +466,7 @@ class KenderaanController extends Controller
             'car' => $car,
             'departments' => $departments,
             'pengawas' => $pengawas,
+            'selectedPengawasIds' => $selectedPengawasIds,
             'jenisBadan' => $jenisBadan,
             'kelasGuna' => $kelasGuna,
             'lokasiPenempatan' => $lokasiPenempatan,

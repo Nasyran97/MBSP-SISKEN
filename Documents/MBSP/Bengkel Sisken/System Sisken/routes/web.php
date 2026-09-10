@@ -135,6 +135,7 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
 
     //SIDEMENU TETEPAN - REKOD KENDERAAN
     Route::get('/rekod-car-list', [KenderaanController::class, 'carList'])->name('rekod-car-list');
+    Route::get('/rekod-car-export', [KenderaanController::class, 'exportCarList'])->name('rekod-car-export');
     Route::get('/rekod-car-add', [KenderaanController::class, 'create'])->name('rekod-car-add');
     Route::post('/rekod-car-store', [KenderaanController::class, 'store'])->name('rekod-car-store');
     Route::get('/rekod-car-edit/{id}', [KenderaanController::class, 'edit'])->name('rekod-car-edit');
@@ -265,7 +266,8 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::get('/mahkamah-kes/{id}/pdf', [MahkamahController::class, 'printMahkamahKesPdf'])->name('mahkamah-kes-pdf');
 
     // SIDEMENU CUKAI JALAN DAN INSURANS - LUPUS KENDERAAN
-    Route::get('/lupus-car-list', [LupusController::class, 'lupusCarList'])->name('lupus-car-list');  
+    Route::get('/lupus-car-list', [LupusController::class, 'lupusCarList'])->name('lupus-car-list');
+    Route::get('/lupus-car-export', [LupusController::class, 'exportLupusCarList'])->name('lupus-car-export');
     Route::get('/lupus-car/{id}/edit', [LupusController::class, 'lupusCarEdit'])->name('lupus-car-edit');
     Route::put('/lupus-car/{id}/update', [LupusController::class, 'lupusCarUpdate'])->name('lupus-car-update');
     Route::get('/lupus-car/add/{vehicleId}', [LupusController::class, 'create'])->name('lupus-car-add');
@@ -283,6 +285,7 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::put('/penyelenggaraan/{id}/update', [PenyelenggaraanController::class, 'update'])->name('penyelenggaraan-update');
     Route::post('/penyelenggaraan/{id}/delete', [PenyelenggaraanController::class, 'delete'])->name('penyelenggaraan-delete');
     Route::post('/penyelenggaraan/{id}/accept', [PenyelenggaraanController::class, 'accept'])->name('penyelenggaraan-accept');
+    Route::post('/penyelenggaraan/{id}/confirm', [PenyelenggaraanController::class, 'confirmPengesahan'])->name('penyelenggaraan-confirm');
 
     //MOD UJIAN (SUPERADMIN) - TUKAR AKAUN UNTUK TESTING
     Route::post('/impersonate/start', [ImpersonateController::class, 'start'])->name('impersonate-start');

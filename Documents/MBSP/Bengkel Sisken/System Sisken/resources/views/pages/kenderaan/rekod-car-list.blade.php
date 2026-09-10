@@ -8,10 +8,17 @@
             <p class="mt-1 text-sm text-gray-500">Senarai maklumat kenderaan.</p>
         </div>
 
-        <a href="{{ route('rekod-car-add') }}"
-           class="inline-flex items-center justify-center rounded-lg bg-brand-500 px-5 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600">
-            + Tambah Kenderaan
-        </a>
+        <div class="flex items-center gap-3">
+            <a href="{{ route('rekod-car-export') }}"
+               class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-emerald-700">
+                Export Excel
+            </a>
+
+            <a href="{{ route('rekod-car-add') }}"
+               class="inline-flex items-center justify-center rounded-lg bg-brand-500 px-5 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-brand-600">
+                + Tambah Kenderaan
+            </a>
+        </div>
     </div>
 
     <x-common.component-card title="Senarai Kenderaan">

@@ -13,6 +13,13 @@
             </p>
         </div>
 
+        <div>
+            <a href="{{ route('lupus-car-export') }}"
+                class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-emerald-700">
+                Export Excel
+            </a>
+        </div>
+
         {{-- <div>
             <a href="{{ route('lupus-data-add') }}"
                 class="inline-flex items-center rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700">

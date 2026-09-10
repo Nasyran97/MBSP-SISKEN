@@ -6,15 +6,45 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet">        
-    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
-    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <!-- Turbo Drive: swaps page content via AJAX instead of a full browser reload -->
+    <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8/dist/turbo.min.js" data-turbo-track="reload"></script>
+    <script>
+        // Turbo re-executes <body> scripts on every visit but does not fire a fresh
+        // DOMContentLoaded (the JS context is never torn down between navigations).
+        // Existing per-page scripts across the app listen for DOMContentLoaded, so we
+        // replay a synthetic one after every Turbo navigation (skipping the very first
+        // load, since the real DOMContentLoaded already covers it) instead of rewriting
+        // every page's script.
+        (function () {
+            let isFirstTurboLoad = true;
+            document.addEventListener('turbo:load', function () {
+                if (isFirstTurboLoad) {
+                    isFirstTurboLoad = false;
+                    return;
+                }
+                document.dispatchEvent(new Event('DOMContentLoaded', { bubbles: true, cancelable: true }));
+            });
+        })();
+    </script>
+
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.css" rel="stylesheet" data-turbo-track="reload">
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css" data-turbo-track="reload">
+    <link rel="stylesheet" href="https://cdn.datatables.net/responsive/2.5.0/css/responsive.dataTables.min.css" data-turbo-track="reload">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" data-turbo-track="reload">
 
     <title>{{ $title ?? 'Dashboard' }} | SISKEN</title>
 
     <!-- Scripts -->
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+
+    <!-- Vendor libraries: loaded once in <head> so Turbo keeps them across navigations
+         instead of re-downloading/re-executing them on every page click -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" data-turbo-track="reload"></script>
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js" data-turbo-track="reload"></script>
+    <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js" data-turbo-track="reload"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11" data-turbo-track="reload"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js" data-turbo-track="reload"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr" data-turbo-track="reload"></script>{{-- calendar --}}
 
     <!-- Alpine.js -->
     {{-- <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script> --}}
@@ -133,26 +163,6 @@
                 @yield('content')
             </div>
         </div>
-
-        <script>
-            window.addEventListener('pageshow', function (event) {
-                const nav = performance.getEntriesByType('navigation')[0];
-                const isBackForward = event.persisted || (nav && nav.type === 'back_forward');
-        
-                if (isBackForward && !sessionStorage.getItem('back_reload_once')) {
-                    sessionStorage.setItem('back_reload_once', '1');
-                    window.location.reload();
-                } else {
-                    sessionStorage.removeItem('back_reload_once');
-                }
-            });
-        </script>
-        <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-        <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
-        <script src="https://cdn.datatables.net/responsive/2.5.0/js/dataTables.responsive.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>      {{-- calendar --}}
 
         @include('components.dev.impersonate-widget')
 

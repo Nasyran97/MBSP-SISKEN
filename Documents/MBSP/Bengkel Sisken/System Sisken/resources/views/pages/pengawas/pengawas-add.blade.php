@@ -6,7 +6,7 @@
         <div>
             <h3 class="text-3xl font-bold text-gray-900">{{ $title }}</h3>
             <p class="mt-1 text-sm text-gray-500">
-                Sila pilih jabatan dan nama staf untuk didaftarkan sebagai pengawas.
+                Sila pilih nama staf untuk didaftarkan sebagai pengawas.
             </p>
         </div>
 
@@ -35,29 +35,66 @@
                 <label for="user_id" class="mb-2 block text-sm font-medium text-gray-700">
                     Nama Pengguna / Pengawas
                 </label>
-        
+
                 <select name="user_id" id="user_id"
                     class="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm"
                     required>
                     <option value="" selected disabled>-- Sila Pilih Pengawas --</option>
-        
+
                     @foreach($engineeringUsers as $user)
-                        @php
+                        @php    
                             $userId = $user->ID ?? $user->id ?? null;
-                            $name = $user->NAME ?? $user->name ?? '-';
+                            $nostaff = $user->NOSTAFF ?? $user->nostaff ?? '-';
+                            $name = $user->NAMA ?? $user->nama ?? $user->NAME ?? $user->name ?? '-';
                             $jabatan = $user->JABATAN ?? $user->jabatan ?? '-';
                         @endphp
-        
+
                         <option value="{{ $userId }}"
+                            data-nostaff="{{ $nostaff }}"
+                            data-nama="{{ $name }}"
+                            data-jabatan="{{ $jabatan }}"
                             {{ old('user_id') == $userId ? 'selected' : '' }}>
-                            {{ $name }} - {{ $jabatan }}
+                            {{ $nostaff }} - {{ $name }}
                         </option>
                     @endforeach
                 </select>
-        
+
                 @error('user_id')
                     <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
                 @enderror
+            </div>
+
+            <div class="mb-4">
+                <label class="mb-2 block text-sm font-medium text-gray-700">
+                    No Staff
+                </label>
+
+                <input type="text"
+                    id="display_nostaff"
+                    class="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm bg-gray-100"
+                    readonly>
+            </div>
+
+            <div class="mb-4">
+                <label class="mb-2 block text-sm font-medium text-gray-700">
+                    Nama
+                </label>
+
+                <input type="text"
+                    id="display_nama"
+                    class="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm bg-gray-100"
+                    readonly>
+            </div>
+
+            <div class="mb-4">
+                <label class="mb-2 block text-sm font-medium text-gray-700">
+                    Jabatan
+                </label>
+
+                <input type="text"
+                    id="display_jabatan"
+                    class="w-full rounded-lg border border-gray-300 px-4 py-3 text-sm bg-gray-100"
+                    readonly>
             </div>
         
             {{-- Step 2: No Plat --}}
@@ -101,8 +138,34 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const userSelect = document.getElementById('user_id');
+        const nostaffInput = document.getElementById('display_nostaff');
+        const namaInput = document.getElementById('display_nama');
+        const jabatanInput = document.getElementById('display_jabatan');
+    
+        function updatePengawasInfo(value) {
+            let selectedOption = null;
+    
+            if (value) {
+                selectedOption = userSelect.querySelector('option[value="' + value + '"]');
+            } else {
+                selectedOption = userSelect.options[userSelect.selectedIndex];
+            }
+    
+            if (!selectedOption || !selectedOption.value) {
+                nostaffInput.value = '';
+                namaInput.value = '';
+                jabatanInput.value = '';
+                return;
+            }
+    
+            nostaffInput.value = selectedOption.dataset.nostaff || '';
+            namaInput.value = selectedOption.dataset.nama || '';
+            jabatanInput.value = selectedOption.dataset.jabatan || '';
+        }
+    
         if (typeof TomSelect !== 'undefined') {
-            new TomSelect('#user_id', {
+            const userTom = new TomSelect('#user_id', {
                 create: false,
                 allowEmptyOption: true,
                 placeholder: 'Cari nama pengawas...',
@@ -111,6 +174,9 @@
                 sortField: {
                     field: 'text',
                     direction: 'asc'
+                },
+                onChange: function (value) {
+                    updatePengawasInfo(value);
                 }
             });
     
@@ -126,7 +192,15 @@
                     direction: 'asc'
                 }
             });
+    
+            updatePengawasInfo(userTom.getValue());
+        } else {
+            userSelect.addEventListener('change', function () {
+                updatePengawasInfo(this.value);
+            });
+    
+            updatePengawasInfo(userSelect.value);
         }
     });
-    </script>
+</script>
 @endsection

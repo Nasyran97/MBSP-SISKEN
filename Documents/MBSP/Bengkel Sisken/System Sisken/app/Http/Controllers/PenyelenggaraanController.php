@@ -46,6 +46,7 @@ class PenyelenggaraanController extends Controller
                 DB::raw('pv.STATUS_DATA as "STATUS_DATA"'),
                 DB::raw('pv.CREATED_BY as "CREATED_BY"'),
                 DB::raw('pv.CREATED_AT as "CREATED_AT"'),
+                DB::raw('pv.PENGESAHAN_AT as "PENGESAHAN_AT"'),
 
                 DB::raw('v.NO_PLAT as "NO_PLAT"'),
                 DB::raw('v.BUATAN as "BUATAN"'),
@@ -350,12 +351,24 @@ class PenyelenggaraanController extends Controller
             return back()->with('error', 'Permohonan ini bukan dalam status pending.');
         }
 
+        $repairCategory = strtoupper(trim($penyelenggaraan->REPAIR_CATEGORY ?? $penyelenggaraan->repair_category ?? ''));
+
+        $requiresPengesahan = in_array($repairCategory, [
+            'BREAKDOWN',
+            'SERVIS',
+            'PEMBAIKAN_RINGAN',
+            'PEMBAIKAN_BERAT',
+            'KIMPALAN',
+        ]);
+
+        $nextStatus = $requiresPengesahan ? 'PENGESAHAN' : 'IN PROGRESS';
+
         $affected = DB::connection('oracle')
             ->table('PENYELENGGARAAN_VEHICLE')
             ->where('ID', $id)
             ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
             ->update([
-                'STATUS' => 'IN PROGRESS',
+                'STATUS' => $nextStatus,
                 'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
                 'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
             ]);
@@ -365,6 +378,51 @@ class PenyelenggaraanController extends Controller
         }
 
         return back()->with('success', 'Permohonan penyelenggaraan berjaya diterima.');
+    }
+
+    public function confirmPengesahan($id)
+    {
+        $currentUser = $this->getCurrentUser();
+
+        $penyelenggaraan = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->first();
+
+        if (!$penyelenggaraan) {
+            return back()->with('error', 'Rekod penyelenggaraan tidak dijumpai.');
+        }
+
+        $createdBy = $penyelenggaraan->CREATED_BY ?? $penyelenggaraan->created_by ?? null;
+
+        if (!$createdBy || $createdBy !== session('nostaff')) {
+            abort(403, 'Hanya pengawas jabatan yang mencipta permohonan ini boleh mengesahkannya.');
+        }
+
+        $status = strtoupper(trim($penyelenggaraan->STATUS ?? $penyelenggaraan->status ?? ''));
+
+        if ($status !== 'PENGESAHAN') {
+            return back()->with('error', 'Permohonan ini bukan dalam status menunggu pengesahan.');
+        }
+
+        $now = now('Asia/Kuala_Lumpur');
+
+        $affected = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->update([
+                'STATUS' => 'IN PROGRESS',
+                'PENGESAHAN_AT' => $now,
+                'UPDATED_BY' => session('nostaff'),
+                'UPDATED_AT' => $now,
+            ]);
+
+        if ($affected === 0) {
+            return back()->with('error', 'Tiada rekod aktif dijumpai untuk disahkan.');
+        }
+
+        return back()->with('success', 'Permohonan penyelenggaraan berjaya disahkan.');
     }
 
     public function store(Request $request)

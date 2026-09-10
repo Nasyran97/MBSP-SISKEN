@@ -76,7 +76,7 @@ class PengawasController extends Controller
             ->select(
                 DB::raw('u.ID as "ID"'),
                 DB::raw('u.NOSTAFF as "NOSTAFF"'),
-                DB::raw('u.NAMA as "NAME"'),
+                DB::raw('u.NAMA as "NAMA"'),
                 DB::raw('u.EMAIL as "EMAIL"'),
                 DB::raw('u.JABATAN as "JABATAN"'),
                 DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
@@ -84,9 +84,9 @@ class PengawasController extends Controller
             ->whereNotNull('u.MODULE_ROLE')
             ->whereRaw("
                 (
-                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"ENGINEERING\" && @.role == 48)')
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == 48)')
                     OR
-                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"ENGINEERING\" && @.role == \"48\")')
+                    JSON_EXISTS(u.MODULE_ROLE, '$[*]?(@.module == \"PENYELENGGARAAN\" && @.role == \"48\")')
                 )
             ")
             ->whereRaw("UPPER(u.STATUS_DATA) = 'ACTIVE'")

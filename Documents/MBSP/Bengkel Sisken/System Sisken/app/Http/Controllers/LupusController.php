@@ -327,4 +327,108 @@ class LupusController extends Controller
             'lupusCars' => $lupusCars,
         ]);
     }
+
+    public function exportLupusCarList()
+    {
+        $lupusCars = DB::connection('oracle')
+            ->table('VEHICLE_LUPUS as vl')
+            ->leftJoin('VEHICLE as v', 'v.ID', '=', 'vl.VEHICLE_ID')
+            ->select(
+                DB::raw('vl.ID as "ID"'),
+                DB::raw('vl.VEHICLE_ID as "VEHICLE_ID"'),
+
+                DB::raw('v.NO_PLAT as "NO_PLAT"'),
+                DB::raw('v.BUATAN as "BUATAN"'),
+                DB::raw('v.MODEL as "MODEL"'),
+
+                DB::raw('vl.PEMBELI as "PEMBELI"'),
+                DB::raw('vl.HARGA_JUALAN as "HARGA_JUALAN"'),
+                DB::raw('vl.TARIKH_LUPUS as "TARIKH_LUPUS"'),
+                DB::raw('vl.KAEDAH_JUALAN as "KAEDAH_JUALAN"'),
+                DB::raw('vl.CUKAI_KASTAM as "CUKAI_KASTAM"'),
+                DB::raw('vl.TARIKH_LELONG as "TARIKH_LELONG"'),
+                DB::raw('vl.STATUS_LUPUS as "STATUS_LUPUS"'),
+                DB::raw('vl.TARIKH_TUKAR_MILIK as "TARIKH_TUKAR_MILIK"'),
+                DB::raw('vl.TARIKH_PUSPAKOM as "TARIKH_PUSPAKOM"'),
+                DB::raw('vl.STATUS_DATA as "STATUS_DATA"')
+            )
+            ->whereRaw("UPPER(v.STATUS_DATA) = 'LUPUS'")
+            ->whereRaw("UPPER(vl.STATUS_DATA) = 'ACTIVE'")
+            ->orderBy('vl.ID', 'desc')
+            ->get();
+
+        $get = function ($row, $key) {
+            $normalized = [];
+
+            foreach ((array) $row as $rowKey => $value) {
+                $normalized[strtoupper($rowKey)] = $value;
+            }
+
+            $value = $normalized[strtoupper($key)] ?? null;
+
+            return ($value !== null && $value !== '') ? $value : null;
+        };
+
+        $formatDate = function ($value) {
+            if (!$value) {
+                return '-';
+            }
+
+            try {
+                return \Carbon\Carbon::parse($value)->format('d/m/Y');
+            } catch (\Exception $e) {
+                return '-';
+            }
+        };
+
+        $headers = [
+            'No Plat',
+            'Buatan',
+            'Model',
+            'Pembeli',
+            'Harga Jualan',
+            'Status',
+            'Tarikh Lupus',
+            'Kaedah Jualan',
+            'Cukai Kastam',
+            'Tarikh Lelong',
+            'Tarikh Tukar Milik',
+            'Tarikh Puspakom',
+        ];
+
+        $filename = 'senarai-lupus-kenderaan-' . now()->format('Ymd_His') . '.csv';
+
+        $callback = function () use ($lupusCars, $headers, $get, $formatDate) {
+            $handle = fopen('php://output', 'w');
+
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, $headers);
+
+            foreach ($lupusCars as $row) {
+                $hargaJualan = $get($row, 'HARGA_JUALAN');
+
+                fputcsv($handle, [
+                    $get($row, 'NO_PLAT') ?? '-',
+                    $get($row, 'BUATAN') ?? '-',
+                    $get($row, 'MODEL') ?? '-',
+                    $get($row, 'PEMBELI') ?? '-',
+                    $hargaJualan !== null ? 'RM ' . number_format((float) $hargaJualan, 2) : '-',
+                    $get($row, 'STATUS_LUPUS') ?? '-',
+                    $formatDate($get($row, 'TARIKH_LUPUS')),
+                    $get($row, 'KAEDAH_JUALAN') ?? '-',
+                    $get($row, 'CUKAI_KASTAM') ?? '-',
+                    $formatDate($get($row, 'TARIKH_LELONG')),
+                    $formatDate($get($row, 'TARIKH_TUKAR_MILIK')),
+                    $formatDate($get($row, 'TARIKH_PUSPAKOM')),
+                ]);
+            }
+
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+        ]);
+    }
 }

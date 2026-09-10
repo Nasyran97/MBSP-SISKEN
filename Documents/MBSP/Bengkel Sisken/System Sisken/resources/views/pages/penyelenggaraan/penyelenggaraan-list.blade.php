@@ -22,6 +22,7 @@
     <x-common.component-card title="Senarai Penyelenggaraan">
         <div class="penyelenggaraan-tabs">
             <button type="button" class="tab-btn active" data-status-tab="PENDING">Pending</button>
+            <button type="button" class="tab-btn" data-status-tab="PENGESAHAN">Pengesahan</button>
             <button type="button" class="tab-btn" data-status-tab="PROGRESS">Dalam Proses</button>
             <button type="button" class="tab-btn" data-status-tab="COMPLETED">Selesai</button>
             <button type="button" class="tab-btn" data-status-tab="CANCELLED">Batal</button>
@@ -74,6 +75,7 @@
 
                             $statusClass = match($status) {
                                 'PENDING' => 'status-pending',
+                                'PENGESAHAN' => 'status-pengesahan',
                                 'IN PROGRESS', 'IN_PROGRESS', 'DALAM PROSES' => 'status-progress',
                                 'COMPLETED', 'COMPLETE', 'SELESAI' => 'status-completed',
                                 'CANCELLED', 'CANCELED', 'BATAL' => 'status-cancelled',
@@ -81,10 +83,12 @@
                             };
 
                             $createdBy = $row->CREATED_BY ?? $row->created_by ?? null;
+                            $isOwnRow = $createdBy && $createdBy === session('nostaff');
                             $canManageRow = !$isDeletedRow
-                                && ($isSuperAdmin || ($createdBy && $createdBy === session('nostaff')));
+                                && ($isSuperAdmin || $isOwnRow);
                             $canEditRow = $canManageRow && $status === 'PENDING';
                             $canDeleteRow = $canManageRow && !in_array($status, ['COMPLETED', 'COMPLETE', 'SELESAI']);
+                            $canConfirmRow = !$isDeletedRow && $status === 'PENGESAHAN' && $isOwnRow;
                         @endphp
 
                         <tr>
@@ -160,6 +164,24 @@
                                                     class="action-btn terima-btn"
                                                     title="Terima"
                                                     onclick="return confirm('Adakah anda pasti mahu terima permohonan penyelenggaraan ini?')">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                    <path d="M5 12L10 17L19 8"
+                                                          stroke="currentColor"
+                                                          stroke-width="1.8"
+                                                          stroke-linecap="round"
+                                                          stroke-linejoin="round" />
+                                                </svg>
+                                            </button>
+                                        </form>
+                                    @endif
+
+                                    @if($canConfirmRow)
+                                        <form method="POST" action="{{ route('penyelenggaraan-confirm', $id) }}">
+                                            @csrf
+                                            <button type="submit"
+                                                    class="action-btn sahkan-btn"
+                                                    title="Sahkan"
+                                                    onclick="return confirm('Adakah anda pasti mahu sahkan permohonan penyelenggaraan ini?')">
                                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                                                     <path d="M5 12L10 17L19 8"
                                                           stroke="currentColor"
@@ -258,6 +280,7 @@
 
             $locationName = $row->LOCATION_NAME ?? $row->location_name ?? '-';
             $createdAt = $row->CREATED_AT ?? $row->created_at ?? null;
+            $pengesahanAt = $row->PENGESAHAN_AT ?? $row->pengesahan_at ?? null;
 
             $hasBreakdownLocation = (
                 $repairCategory === 'BREAKDOWN' &&
@@ -364,6 +387,11 @@
                     </div>
 
                     <div>
+                        <span>Tarikh Pengesahan</span>
+                        <strong>{{ $pengesahanAt ? $formatDate($pengesahanAt) : '-' }}</strong>
+                    </div>
+
+                    <div>
                         <span>Koordinat Lokasi</span>
                         <strong>{{ $locationCoordinate ?: '-' }}</strong>
                     </div>
@@ -434,6 +462,11 @@
     .penyelenggaraan-tabs .tab-btn[data-status-tab="PENDING"].active {
         background: #eff6ff;
         color: #1d4ed8;
+    }
+
+    .penyelenggaraan-tabs .tab-btn[data-status-tab="PENGESAHAN"].active {
+        background: #f5f3ff;
+        color: #6941c6;
     }
 
     .penyelenggaraan-tabs .tab-btn[data-status-tab="PROGRESS"].active {
@@ -581,6 +614,12 @@
         border: 1px solid #fedf89;
     }
 
+    .status-pengesahan {
+        background: #f5f3ff;
+        color: #6941c6;
+        border: 1px solid #e9d7fe;
+    }
+
     .status-progress {
         background: #eff6ff;
         color: #1d4ed8;
@@ -652,6 +691,12 @@
         background: #ecfdf3;
         color: #027a48;
         border-color: #abefc6;
+    }
+
+    .sahkan-btn {
+        background: #fdf2fa;
+        color: #c11574;
+        border-color: #fcceee;
     }
 
     .delete-btn {
@@ -940,6 +985,7 @@ $(document).ready(function () {
 
     const statusTabPatterns = {
         PENDING: '\\bPENDING\\b',
+        PENGESAHAN: '\\bPENGESAHAN\\b',
         PROGRESS: '\\b(IN PROGRESS|IN_PROGRESS|DALAM PROSES)\\b',
         COMPLETED: '\\b(COMPLETED|COMPLETE|SELESAI)\\b',
         CANCELLED: '\\b(CANCELLED|CANCELED|BATAL)\\b'
