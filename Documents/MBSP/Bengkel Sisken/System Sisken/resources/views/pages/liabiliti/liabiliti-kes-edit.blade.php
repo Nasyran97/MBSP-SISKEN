@@ -61,7 +61,7 @@
     </div>
 
     <x-common.component-card title="Kemaskini Maklumat Kes">
-        <form method="POST" action="{{ route('liabiliti-kes-update', $id) }}" id="liabilitiAwamEditForm">
+        <form method="POST" action="{{ route('liabiliti-kes-update', $id) }}" id="liabilitiAwamEditForm" enctype="multipart/form-data">
             @csrf
             @method('PUT')
 
@@ -292,6 +292,40 @@
                         class="form-control textarea-control"
                         placeholder="Masukkan laporan adjuster / insurans">{{ old('laporan_adjuster_insurans', $get('LAPORAN_ADJUSTER_INSURANS')) }}</textarea>
                     @error('laporan_adjuster_insurans') <p class="form-error">{{ $message }}</p> @enderror
+                </div>
+
+                <div class="col-span-6">
+                    <label class="form-label">
+                        Lampiran Fail
+                    </label>
+
+                    @php $existingLampiran = $get('LAMPIRAN_FILE'); @endphp
+
+                    @if($existingLampiran)
+                        <div class="mb-2">
+                            <a href="{{ route('liabiliti-kes-file', $id) }}"
+                                target="_blank"
+                                class="text-sm font-semibold text-blue-600 hover:underline">
+                                Lihat Fail Lampiran Semasa
+                            </a>
+                        </div>
+                    @endif
+
+                    <input type="file"
+                        name="lampiran_file"
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        class="form-control">
+
+                    <p class="mt-1 text-xs text-gray-500">
+                        Format dibenarkan: PDF, JPG, JPEG, PNG. Maksimum 5MB.
+                        @if($existingLampiran)
+                            Muat naik fail baharu untuk menggantikan fail semasa.
+                        @endif
+                    </p>
+
+                    @error('lampiran_file')
+                        <p class="form-error">{{ $message }}</p>
+                    @enderror
                 </div>
 
             </div>

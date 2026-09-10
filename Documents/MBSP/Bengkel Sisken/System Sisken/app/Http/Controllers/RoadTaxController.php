@@ -15,6 +15,50 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class RoadTaxController extends Controller
 {
+    private function getCurrentUserContext()
+    {
+        $nostaff = session('nostaff');
+
+        $user = $nostaff
+            ? DB::connection('oracle')->table('USERS')->where('nostaff', $nostaff)->first()
+            : null;
+
+        $isSuperAdmin = false;
+        $userId = $user->ID ?? $user->id ?? null;
+
+        if ($user) {
+            $moduleRole = json_decode($user->MODULE_ROLE ?? $user->module_role ?? '[]', true);
+
+            if (is_array($moduleRole)) {
+                foreach ($moduleRole as $item) {
+                    $module = strtoupper(trim($item['module'] ?? ''));
+                    $roleId = (int) ($item['role'] ?? 0);
+
+                    if ($module === 'SUPERADMIN' && $roleId === 1) {
+                        $isSuperAdmin = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return [$isSuperAdmin, $userId];
+    }
+
+    private function getMyPengawasVehicleIds($userId)
+    {
+        if (!$userId) {
+            return [];
+        }
+
+        return DB::connection('oracle')
+            ->table('PENGAWAS_VEHICLE')
+            ->where('USER_ID', $userId)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->pluck('vehicle_id')
+            ->map(fn ($id) => (string) $id)
+            ->toArray();
+    }
 
     public function cukaiCarList()
     {
@@ -40,6 +84,19 @@ class RoadTaxController extends Controller
 
     public function cukaiJalanInfoList(Request $request)
     {
+        [$isSuperAdmin, $currentUserId] = $this->getCurrentUserContext();
+        $myPengawasVehicleIds = $this->getMyPengawasVehicleIds($currentUserId);
+
+        if (!$isSuperAdmin && empty($myPengawasVehicleIds)) {
+            return view('pages.roadtax.cukai-jalan-info-list', [
+                'title' => 'Maklumat Cukai Jalan',
+                'cars' => collect(),
+                'roadtaxHistories' => collect(),
+                'isSuperAdmin' => $isSuperAdmin,
+                'myPengawasVehicleIds' => $myPengawasVehicleIds,
+            ]);
+        }
+
         $query = DB::connection('oracle')
             ->table('VEHICLE as v')
             ->leftJoin('PENGAWAS_VEHICLE as p', function ($join) {
@@ -89,6 +146,10 @@ class RoadTaxController extends Controller
             )
             ->whereRaw("UPPER(v.STATUS_DATA) = 'ACTIVE'");
 
+        if (!$isSuperAdmin) {
+            $query->whereIn('v.ID', $myPengawasVehicleIds);
+        }
+
         if ($request->filled('tamat_year')) {
             $query->whereRaw("TO_CHAR(r.TARIKH_TAMAT, 'YYYY') = ?", [
                 $request->tamat_year
@@ -105,7 +166,7 @@ class RoadTaxController extends Controller
             ->orderBy('v.NO_PLAT')
             ->get();
 
-        $roadtaxHistories = DB::connection('oracle')
+        $roadtaxHistoriesQuery = DB::connection('oracle')
             ->table('VEHICLE_ROADTAX')
             ->select(
                 DB::raw('ID as "id"'),
@@ -115,7 +176,13 @@ class RoadTaxController extends Controller
                 DB::raw('JKPTOJPJ as "jkptojpj"'),
                 DB::raw('JKPTOJAB as "jkptojab"'),
                 DB::raw('ROADTAX_STATUS as "roadtax_status"')
-            )
+            );
+
+        if (!$isSuperAdmin) {
+            $roadtaxHistoriesQuery->whereIn('VEHICLE_ID', $myPengawasVehicleIds);
+        }
+
+        $roadtaxHistories = $roadtaxHistoriesQuery
             ->orderBy('VEHICLE_ID')
             ->orderBy('TARIKH_TAMAT', 'DESC')
             ->get()
@@ -125,6 +192,8 @@ class RoadTaxController extends Controller
             'title' => 'Maklumat Cukai Jalan',
             'cars' => $cars,
             'roadtaxHistories' => $roadtaxHistories,
+            'isSuperAdmin' => $isSuperAdmin,
+            'myPengawasVehicleIds' => $myPengawasVehicleIds,
         ]);
     }
 
@@ -326,6 +395,25 @@ class RoadTaxController extends Controller
 
     public function storeRoadtax(Request $request)
     {
+        [$isSuperAdmin, $currentUserId] = $this->getCurrentUserContext();
+
+        $vehicleId = $request->vehicle_id;
+
+        if (!$vehicleId && $request->filled('roadtax_id')) {
+            $vehicleId = DB::connection('oracle')
+                ->table('VEHICLE_ROADTAX')
+                ->where('ID', $request->roadtax_id)
+                ->value('VEHICLE_ID');
+        }
+
+        if (!$isSuperAdmin) {
+            $myPengawasVehicleIds = $this->getMyPengawasVehicleIds($currentUserId);
+
+            if (!in_array((string) $vehicleId, $myPengawasVehicleIds)) {
+                abort(403, 'Anda tidak mempunyai akses untuk mengemaskini cukai jalan kenderaan ini.');
+            }
+        }
+
         if ($request->mode === 'jkp') {
             $request->validate([
                 'roadtax_id' => 'required',

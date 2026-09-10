@@ -474,6 +474,7 @@ class TuntutanController extends Controller
                 DB::raw('l.STATUS_TUNTUTAN as "STATUS_TUNTUTAN"'),
                 DB::raw('l.KEPUTUSAN_KES as "KEPUTUSAN_KES"'),
                 DB::raw('l.LAPORAN_ADJUSTER_INSURANS as "LAPORAN_ADJUSTER_INSURANS"'),
+                DB::raw('l.LAMPIRAN_FILE as "LAMPIRAN_FILE"'),
                 DB::raw('l.STATUS_DATA as "STATUS_DATA"')
             )
             ->where('l.ID', $id)
@@ -549,6 +550,8 @@ class TuntutanController extends Controller
             'status_tuntutan' => 'required|string|in:DALAM PROSES,TINDAKAN ADJUSTER,SELESAI TANDATANGAN OFFER LETTER',
             'keputusan_kes' => 'nullable|string|in:LULUS,DITOLAK',
             'laporan_adjuster_insurans' => 'nullable|string',
+
+            'lampiran_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ], [
             'tahun.required' => 'Sila masukkan tahun.',
             'tahun.digits' => 'Tahun mestilah 4 digit.',
@@ -563,6 +566,9 @@ class TuntutanController extends Controller
             'bahagian.required' => 'Sila pilih bahagian.',
             'daerah_kejadian.required' => 'Sila pilih daerah kejadian.',
             'status_tuntutan.required' => 'Sila pilih status tuntutan.',
+
+            'lampiran_file.mimes' => 'Fail mestilah dalam format PDF, JPG, JPEG atau PNG.',
+            'lampiran_file.max' => 'Saiz fail maksimum ialah 5MB.',
         ]);
     
         $record = DB::connection('oracle')
@@ -592,39 +598,64 @@ class TuntutanController extends Controller
         $tuntutanName = $jenisTuntutan->TUNTUTAN_NAME
             ?? $jenisTuntutan->tuntutan_name
             ?? null;
-    
+
+        $updateData = [
+            'TAHUN' => $request->tahun,
+            'NO_PLAT_HARTA_BENDA' => strtoupper(trim($request->no_plat_harta_benda)),
+            'TARIKH_HANTAR_KES' => $request->tarikh_hantar_kes,
+
+            'TUNTUTAN_AWAM_ID' => $request->tuntutan_awam_id,
+            'JENIS_TUNTUTAN' => $tuntutanName,
+
+            'NAMA_PENUNTUT' => strtoupper(trim($request->nama_penuntut)),
+            'TARIKH_KEJADIAN' => $request->tarikh_kejadian,
+            'AMAUN_TUNTUTAN' => $request->amaun_tuntutan,
+            'NO_TELEFON' => $request->no_telefon,
+            'TARIKH_OFFER_LETTER' => $request->tarikh_offer_letter,
+
+            'LOKASI_KEJADIAN' => $request->lokasi_kejadian,
+            'JABATAN_KOD' => $request->jabatan_kod,
+            'JABATAN_NAMA' => $request->jabatan_nama,
+
+            'BAHAGIAN' => $request->bahagian,
+            'DAERAH_KEJADIAN' => $request->daerah_kejadian,
+
+            'STATUS_TUNTUTAN' => $request->status_tuntutan,
+            'KEPUTUSAN_KES' => $request->keputusan_kes,
+
+            'LAPORAN_ADJUSTER_INSURANS' => $request->laporan_adjuster_insurans,
+
+            'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
+            'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
+        ];
+
+        if ($request->hasFile('lampiran_file')) {
+            $file = $request->file('lampiran_file');
+
+            $folder = 'Liabiliti Awam/' . now('Asia/Kuala_Lumpur')->format('Y') . '/' . now('Asia/Kuala_Lumpur')->format('m');
+
+            $platNo = strtoupper(trim($request->no_plat_harta_benda));
+            $safePlatNo = Str::slug($platNo) ?: 'harta-benda';
+
+            $extension = strtolower($file->getClientOriginalExtension());
+
+            $newFileName = now('Asia/Kuala_Lumpur')->format('Ymd_His') . '_' . $safePlatNo . '.' . $extension;
+
+            Storage::disk('synology')->putFileAs($folder, $file, $newFileName);
+
+            $updateData['LAMPIRAN_FILE'] = $folder . '/' . $newFileName;
+
+            $oldFile = $record->LAMPIRAN_FILE ?? $record->lampiran_file ?? null;
+
+            if ($oldFile && Storage::disk('synology')->exists($oldFile)) {
+                Storage::disk('synology')->delete($oldFile);
+            }
+        }
+
         DB::connection('oracle')
             ->table('LIABILITI_AWAM')
             ->where('ID', $id)
-            ->update([
-                'TAHUN' => $request->tahun,
-                'NO_PLAT_HARTA_BENDA' => strtoupper(trim($request->no_plat_harta_benda)),
-                'TARIKH_HANTAR_KES' => $request->tarikh_hantar_kes,
-    
-                'TUNTUTAN_AWAM_ID' => $request->tuntutan_awam_id,
-                'JENIS_TUNTUTAN' => $tuntutanName,
-    
-                'NAMA_PENUNTUT' => strtoupper(trim($request->nama_penuntut)),
-                'TARIKH_KEJADIAN' => $request->tarikh_kejadian,
-                'AMAUN_TUNTUTAN' => $request->amaun_tuntutan,
-                'NO_TELEFON' => $request->no_telefon,
-                'TARIKH_OFFER_LETTER' => $request->tarikh_offer_letter,
-    
-                'LOKASI_KEJADIAN' => $request->lokasi_kejadian,
-                'JABATAN_KOD' => $request->jabatan_kod,
-                'JABATAN_NAMA' => $request->jabatan_nama,
-    
-                'BAHAGIAN' => $request->bahagian,
-                'DAERAH_KEJADIAN' => $request->daerah_kejadian,
-    
-                'STATUS_TUNTUTAN' => $request->status_tuntutan,
-                'KEPUTUSAN_KES' => $request->keputusan_kes,
-    
-                'LAPORAN_ADJUSTER_INSURANS' => $request->laporan_adjuster_insurans,
-    
-                'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
-                'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
-            ]);
+            ->update($updateData);
     
         return redirect()
             ->route('liabiliti-kes-list')

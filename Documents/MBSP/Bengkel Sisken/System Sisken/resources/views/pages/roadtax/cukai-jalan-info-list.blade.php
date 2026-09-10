@@ -98,6 +98,9 @@
                                 'AKAN AKTIF' => 'status-upcoming',
                                 default => 'status-default',
                             };
+
+                            $canEditRoadtax = ($isSuperAdmin ?? false)
+                                || in_array((string) $vehicleId, $myPengawasVehicleIds ?? []);
                         @endphp
 
                         <tr>
@@ -162,12 +165,16 @@
                             </td>
 
                             <td class="text-center">
-                                <button type="button"
-                                    class="action-btn edit-btn"
-                                    onclick="openRoadtaxEditModal('roadtax-edit-modal-{{ $vehicleId }}')"
-                                    title="Tambah Roadtax">
-                                    ✏️
-                                </button>
+                                @if($canEditRoadtax)
+                                    <button type="button"
+                                        class="action-btn edit-btn"
+                                        onclick="openRoadtaxEditModal('roadtax-edit-modal-{{ $vehicleId }}')"
+                                        title="Tambah Roadtax">
+                                        ✏️
+                                    </button>
+                                @else
+                                    -
+                                @endif
                             </td>
                         </tr>
                     @endforeach

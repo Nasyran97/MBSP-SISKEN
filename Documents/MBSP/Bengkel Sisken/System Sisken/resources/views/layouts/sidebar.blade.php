@@ -145,6 +145,11 @@
                                                         new
                                                     </span>
                                                 @endif
+                                                @if (!empty($item['badge_count']))
+                                                    <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-[11px] font-bold leading-none">
+                                                        {{ $item['badge_count'] }}
+                                                    </span>
+                                                @endif
                                             </span>
 
                                             <!-- Chevron Down Icon -->

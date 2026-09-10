@@ -144,6 +144,7 @@ class MenuHelper
             [
                 'icon' => 'roadtax',
                 'name' => 'Pembaharuan Cukai Jalan',
+                'badge_count' => self::getRoadtaxExpiringCount(),
                 'subItems' => [
                     // ['name' => 'Senarai Kenderaan', 'path' => '/cukai-jalan-car-list', 'pro' => false],
                     ['name' => 'Maklumat Cukai Jalan', 'path' => '/cukai-jalan-info-list', 'pro' => false],
@@ -264,6 +265,85 @@ class MenuHelper
                 ],
             ],
         ];
+    }
+
+    private static function getCurrentUserId()
+    {
+        $nostaff = session('nostaff');
+
+        if (!$nostaff) {
+            return null;
+        }
+
+        $user = DB::connection('oracle')
+            ->table('USERS')
+            ->where('nostaff', $nostaff)
+            ->first();
+
+        return $user->ID ?? $user->id ?? null;
+    }
+
+    private static function getMyPengawasVehicleIds($userId)
+    {
+        if (!$userId) {
+            return [];
+        }
+
+        return DB::connection('oracle')
+            ->table('PENGAWAS_VEHICLE')
+            ->where('USER_ID', $userId)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->pluck('vehicle_id')
+            ->map(fn ($id) => (string) $id)
+            ->toArray();
+    }
+
+    private static function getRoadtaxExpiringCount()
+    {
+        $isSuperAdmin = self::isSuperAdmin();
+
+        $myVehicleIds = [];
+
+        if (!$isSuperAdmin) {
+            $myVehicleIds = self::getMyPengawasVehicleIds(self::getCurrentUserId());
+
+            if (empty($myVehicleIds)) {
+                return 0;
+            }
+        }
+
+        $query = DB::connection('oracle')
+            ->table('VEHICLE as v')
+            ->leftJoin('VEHICLE_ROADTAX as r', function ($join) {
+                $join->on('r.VEHICLE_ID', '=', 'v.ID')
+                    ->whereRaw("
+                        r.ID = (
+                            SELECT r2.ID
+                            FROM VEHICLE_ROADTAX r2
+                            WHERE r2.VEHICLE_ID = v.ID
+                            ORDER BY
+                                CASE
+                                    WHEN TRUNC(SYSDATE) BETWEEN TRUNC(r2.TARIKH_MULA) AND TRUNC(r2.TARIKH_TAMAT) THEN 1
+                                    WHEN TRUNC(r2.TARIKH_MULA) > TRUNC(SYSDATE) THEN 2
+                                    ELSE 3
+                                END,
+                                CASE
+                                    WHEN TRUNC(r2.TARIKH_MULA) > TRUNC(SYSDATE) THEN r2.TARIKH_MULA
+                                END ASC,
+                                r2.TARIKH_TAMAT DESC,
+                                r2.ID DESC
+                            FETCH FIRST 1 ROW ONLY
+                        )
+                    ");
+            })
+            ->whereRaw("UPPER(v.STATUS_DATA) = 'ACTIVE'")
+            ->whereRaw("UPPER(r.ROADTAX_STATUS) IN ('TAMAT TEMPOH', 'AKAN TAMAT TEMPOH')");
+
+        if (!$isSuperAdmin) {
+            $query->whereIn('v.ID', $myVehicleIds);
+        }
+
+        return $query->count();
     }
 
     private static function getCurrentUserModuleRoles()
