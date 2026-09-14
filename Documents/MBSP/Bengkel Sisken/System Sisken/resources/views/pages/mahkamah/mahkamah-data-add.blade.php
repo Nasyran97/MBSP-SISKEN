@@ -22,7 +22,7 @@
     </div>
 
     <x-common.component-card title="Maklumat Kes Mahkamah">
-        <form method="POST" action="{{ route('mahkamah-data-store') }}" id="mahkamahForm">
+        <form method="POST" action="{{ route('mahkamah-data-store') }}" id="mahkamahForm" enctype="multipart/form-data">
             @csrf
 
             <div class="form-section">
@@ -288,6 +288,29 @@
                 </div>
             </div>
 
+            <div class="form-section mt-6">
+                <h4 class="section-title">Lampiran Fail</h4>
+
+                <div class="grid grid-cols-12 gap-4">
+                    <div class="col-span-12">
+                        <label class="form-label">Muat Naik Fail</label>
+
+                        <input type="file"
+                            name="file_upload"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            class="form-control file-control">
+
+                        <p class="mt-1 text-xs text-gray-500">
+                            Format dibenarkan: PDF, JPG, JPEG, PNG. Maksimum 5MB.
+                        </p>
+
+                        @error('file_upload')
+                            <p class="form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+            </div>
+
             <div class="mt-8 flex justify-end gap-3 border-t border-gray-200 pt-6">
                 <button type="reset"
                     class="px-6 py-3 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold">
@@ -346,6 +369,10 @@
     .textarea-control {
         padding-top: 12px;
         min-height: 130px;
+    }
+
+    .file-control {
+        padding: 10px 14px;
     }
 
     .form-error {

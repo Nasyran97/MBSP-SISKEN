@@ -39,6 +39,7 @@
     };
 
     $kesId = $get('ID');
+    $fileUpload = $get('FILE_UPLOAD');
 @endphp
 
 <div class="container-fluid">
@@ -62,7 +63,7 @@
     </div>
 
     <x-common.component-card title="Kemaskini Kes Mahkamah">
-        <form method="POST" action="{{ route('mahkamah-kes-update', $kesId) }}" id="mahkamahForm">
+        <form method="POST" action="{{ route('mahkamah-kes-update', $kesId) }}" id="mahkamahForm" enctype="multipart/form-data">
             @csrf
             @method('PUT')
 
@@ -414,6 +415,39 @@
             </div>
 
             <div class="form-section mt-6">
+                <h4 class="section-title">Lampiran Fail</h4>
+
+                <div class="grid grid-cols-12 gap-4">
+                    <div class="col-span-12">
+                        <label class="form-label">Muat Naik Fail</label>
+
+                        @if(!empty($fileUpload))
+                            <div class="mb-2">
+                                <a href="{{ route('mahkamah-kes-file', $kesId) }}"
+                                    target="_blank"
+                                    class="file-view-btn">
+                                    Lihat Fail Semasa
+                                </a>
+                            </div>
+                        @endif
+
+                        <input type="file"
+                            name="file_upload"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            class="form-control file-control">
+
+                        <p class="mt-1 text-xs text-gray-500">
+                            Biarkan kosong jika tidak mahu tukar fail. Format: PDF, JPG, JPEG, PNG. Maksimum 5MB.
+                        </p>
+
+                        @error('file_upload')
+                            <p class="form-error">{{ $message }}</p>
+                        @enderror
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-section mt-6">
                 <h4 class="section-title">Kemaskini Status Kes</h4>
                 <div class="col-span-6">
                     <label class="form-label">
@@ -497,6 +531,33 @@
     .textarea-control {
         padding-top: 12px;
         min-height: 130px;
+    }
+
+    .file-control {
+        padding: 10px 14px;
+    }
+
+    .file-view-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 38px;
+        padding: 0 14px;
+        border-radius: 10px;
+        background: #ecfdf3;
+        color: #027a48;
+        border: 1px solid #abefc6;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all .2s ease;
+    }
+
+    .file-view-btn:hover {
+        background: #d1fadf;
+        color: #05603a;
+        transform: translateY(-1px);
     }
 
     .form-error {

@@ -19,6 +19,9 @@ class PenyelenggaraanController extends Controller
         $canAcceptPenyelenggaraan = $isSuperAdmin
             || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', 49);
 
+        $canConfirmPenyelenggaraan = $isSuperAdmin
+            || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', 81);
+
         $penyelenggaraanQuery = DB::connection('oracle')
             ->table('PENYELENGGARAAN_VEHICLE as pv')
             ->leftJoin('VEHICLE as v', 'v.ID', '=', 'pv.VEHICLE_ID')
@@ -64,7 +67,7 @@ class PenyelenggaraanController extends Controller
             )
             ->whereRaw("UPPER(pv.STATUS_DATA) IN ('ACTIVE', 'DELETE')");
 
-        if (!$isSuperAdmin && !$canAcceptPenyelenggaraan) {
+        if (!$isSuperAdmin && !$canAcceptPenyelenggaraan && !$canConfirmPenyelenggaraan) {
             $penyelenggaraanQuery->where('pv.CREATED_BY', session('nostaff'));
         }
 
@@ -77,6 +80,7 @@ class PenyelenggaraanController extends Controller
             'penyelenggaraan' => $penyelenggaraan,
             'canApplyPenyelenggaraan' => $canApplyPenyelenggaraan,
             'canAcceptPenyelenggaraan' => $canAcceptPenyelenggaraan,
+            'canConfirmPenyelenggaraan' => $canConfirmPenyelenggaraan,
             'isSuperAdmin' => $isSuperAdmin,
         ]);
     }
@@ -384,6 +388,14 @@ class PenyelenggaraanController extends Controller
     {
         $currentUser = $this->getCurrentUser();
 
+        $isSuperAdmin = $this->isSuperAdminUser($currentUser);
+        $canConfirmPenyelenggaraan = $isSuperAdmin
+            || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', 81);
+
+        if (!$canConfirmPenyelenggaraan) {
+            abort(403, 'Hanya Penolong Jurutera boleh mengesahkan permohonan ini.');
+        }
+
         $penyelenggaraan = DB::connection('oracle')
             ->table('PENYELENGGARAAN_VEHICLE')
             ->where('ID', $id)
@@ -391,12 +403,6 @@ class PenyelenggaraanController extends Controller
 
         if (!$penyelenggaraan) {
             return back()->with('error', 'Rekod penyelenggaraan tidak dijumpai.');
-        }
-
-        $createdBy = $penyelenggaraan->CREATED_BY ?? $penyelenggaraan->created_by ?? null;
-
-        if (!$createdBy || $createdBy !== session('nostaff')) {
-            abort(403, 'Hanya pengawas jabatan yang mencipta permohonan ini boleh mengesahkannya.');
         }
 
         $status = strtoupper(trim($penyelenggaraan->STATUS ?? $penyelenggaraan->status ?? ''));

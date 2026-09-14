@@ -7,6 +7,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class MahkamahController extends Controller
 {
@@ -294,6 +296,7 @@ class MahkamahController extends Controller
             'status_perbicaraan' => 'nullable|string|max:255',
             'tarikh_bicara_seterusnya' => 'nullable|date',
             'keputusan_kes' => 'nullable|string|max:255',
+            'file_upload' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ], [
             'tahun.required' => 'Sila masukkan tahun.',
             'tahun.digits' => 'Tahun mestilah 4 digit.',
@@ -304,6 +307,8 @@ class MahkamahController extends Controller
             'jabatan_kod.required' => 'Sila pilih jabatan.',
             'no_pekerja.required' => 'Sila pilih nama staf.',
             'daerah_kejadian.required' => 'Sila pilih daerah kejadian.',
+            'file_upload.mimes' => 'Format fail mestilah PDF, JPG, JPEG atau PNG.',
+            'file_upload.max' => 'Saiz fail maksimum 5MB.',
         ]);
 
         $jenisTuntutan = DB::connection('oracle')
@@ -339,6 +344,23 @@ class MahkamahController extends Controller
 
         if ($syarikatInsurans === 'Kenderaan ini tiada insurans') {
             $syarikatInsurans = null;
+        }
+
+        $fileUploadPath = null;
+
+        if ($request->hasFile('file_upload')) {
+            $file = $request->file('file_upload');
+
+            $folder = 'Tuntutan Perundangan/' . now('Asia/Kuala_Lumpur')->format('Y') . '/' . now('Asia/Kuala_Lumpur')->format('m');
+
+            $noKesSlug = Str::slug($request->no_kes_mahkamah) ?: 'kes-mahkamah';
+            $extension = strtolower($file->getClientOriginalExtension());
+
+            $newFileName = now('Asia/Kuala_Lumpur')->format('Ymd_His') . '_' . $noKesSlug . '.' . $extension;
+
+            Storage::disk('synology')->putFileAs($folder, $file, $newFileName);
+
+            $fileUploadPath = $folder . '/' . $newFileName;
         }
 
         DB::connection('oracle')
@@ -384,6 +406,8 @@ class MahkamahController extends Controller
                 'STATUS_PERBICARAAN' => $request->status_perbicaraan,
                 'TARIKH_BICARA_SETERUSNYA' => $request->tarikh_bicara_seterusnya,
                 'KEPUTUSAN_KES' => $request->keputusan_kes,
+
+                'FILE_UPLOAD' => $fileUploadPath,
 
                 'CREATED_BY' => session('nostaff') ?? 'SYSTEM',
                 'CREATED_AT' => now('Asia/Kuala_Lumpur'),
@@ -541,6 +565,7 @@ class MahkamahController extends Controller
                 DB::raw('STATUS_PERBICARAAN as "STATUS_PERBICARAAN"'),
                 DB::raw('TARIKH_BICARA_SETERUSNYA as "TARIKH_BICARA_SETERUSNYA"'),
                 DB::raw('KEPUTUSAN_KES as "KEPUTUSAN_KES"'),
+                DB::raw('FILE_UPLOAD as "FILE_UPLOAD"'),
                 DB::raw('STATUS_KES as "STATUS_KES"'),
                 DB::raw('CREATED_BY as "CREATED_BY"'),
                 DB::raw('CREATED_AT as "CREATED_AT"'),
@@ -608,6 +633,7 @@ class MahkamahController extends Controller
                 DB::raw('STATUS_PERBICARAAN as "STATUS_PERBICARAAN"'),
                 DB::raw('TARIKH_BICARA_SETERUSNYA as "TARIKH_BICARA_SETERUSNYA"'),
                 DB::raw('KEPUTUSAN_KES as "KEPUTUSAN_KES"'),
+                DB::raw('FILE_UPLOAD as "FILE_UPLOAD"'),
                 DB::raw('STATUS_KES as "STATUS_KES"'),
                 DB::raw('STATUS_DATA as "STATUS_DATA"')
             )
@@ -719,6 +745,7 @@ class MahkamahController extends Controller
             'tarikh_bicara_seterusnya' => 'nullable|date',
             'keputusan_kes' => 'nullable|string|max:255',
             'status_kes' => 'required|string|in:DALAM PROSES,SELESAI PERBICARAAN',
+            'file_upload' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
         ], [
             'tahun.required' => 'Sila masukkan tahun.',
             'tahun.digits' => 'Tahun mestilah 4 digit.',
@@ -730,6 +757,8 @@ class MahkamahController extends Controller
             'no_pekerja.required' => 'Sila pilih nama staf.',
             'daerah_kejadian.required' => 'Sila pilih daerah kejadian.',
             'status_kes.required' => 'Sila pilih status kes.',
+            'file_upload.mimes' => 'Format fail mestilah PDF, JPG, JPEG atau PNG.',
+            'file_upload.max' => 'Saiz fail maksimum 5MB.',
         ]);
     
         $record = DB::connection('oracle')
@@ -777,7 +806,30 @@ class MahkamahController extends Controller
         if ($syarikatInsurans === 'Kenderaan ini tiada insurans') {
             $syarikatInsurans = null;
         }
-    
+
+        $fileUploadPath = $record->FILE_UPLOAD ?? $record->file_upload ?? null;
+
+        if ($request->hasFile('file_upload')) {
+            $file = $request->file('file_upload');
+
+            $folder = 'Tuntutan Perundangan/' . now('Asia/Kuala_Lumpur')->format('Y') . '/' . now('Asia/Kuala_Lumpur')->format('m');
+
+            $noKesSlug = Str::slug($request->no_kes_mahkamah) ?: 'kes-mahkamah';
+            $extension = strtolower($file->getClientOriginalExtension());
+
+            $newFileName = now('Asia/Kuala_Lumpur')->format('Ymd_His') . '_' . $noKesSlug . '.' . $extension;
+
+            Storage::disk('synology')->putFileAs($folder, $file, $newFileName);
+
+            $oldFile = $fileUploadPath;
+
+            if ($oldFile && Storage::disk('synology')->exists($oldFile)) {
+                Storage::disk('synology')->delete($oldFile);
+            }
+
+            $fileUploadPath = $folder . '/' . $newFileName;
+        }
+
         DB::connection('oracle')
             ->table('MAHKAMAH_KES')
             ->where('ID', $id)
@@ -823,7 +875,9 @@ class MahkamahController extends Controller
                 'TARIKH_BICARA_SETERUSNYA' => $request->tarikh_bicara_seterusnya,
                 'KEPUTUSAN_KES' => $request->keputusan_kes,
                 'STATUS_KES' => $request->status_kes,
-    
+
+                'FILE_UPLOAD' => $fileUploadPath,
+
                 'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
                 'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
             ]);
@@ -837,6 +891,34 @@ class MahkamahController extends Controller
         return redirect()
             ->route('mahkamah-kes-list')
             ->with('success', 'Kes mahkamah berjaya dikemaskini.');
+    }
+
+    public function mahkamahKesFile($id)
+    {
+        $record = DB::connection('oracle')
+            ->table('MAHKAMAH_KES')
+            ->where('ID', $id)
+            ->first();
+
+        if (!$record) {
+            abort(404, 'Rekod tidak dijumpai.');
+        }
+
+        $filePath = $record->FILE_UPLOAD ?? $record->file_upload ?? null;
+
+        if (!$filePath) {
+            abort(404, 'Fail tidak dijumpai.');
+        }
+
+        if (!Storage::disk('synology')->exists($filePath)) {
+            abort(404, 'Fail tidak dijumpai di server.');
+        }
+
+        $mimeType = Storage::disk('synology')->mimeType($filePath) ?? 'application/octet-stream';
+
+        return response(Storage::disk('synology')->get($filePath), 200)
+            ->header('Content-Type', $mimeType)
+            ->header('Content-Disposition', 'inline; filename="' . basename($filePath) . '"');
     }
 
     public function printMahkamahKesPdf($id)

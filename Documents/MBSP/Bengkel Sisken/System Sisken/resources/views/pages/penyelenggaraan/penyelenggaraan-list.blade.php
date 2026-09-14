@@ -88,7 +88,7 @@
                                 && ($isSuperAdmin || $isOwnRow);
                             $canEditRow = $canManageRow && $status === 'PENDING';
                             $canDeleteRow = $canManageRow && !in_array($status, ['COMPLETED', 'COMPLETE', 'SELESAI']);
-                            $canConfirmRow = !$isDeletedRow && $status === 'PENGESAHAN' && $isOwnRow;
+                            $canConfirmRow = !$isDeletedRow && $status === 'PENGESAHAN' && $canConfirmPenyelenggaraan;
                         @endphp
 
                         <tr>
@@ -694,9 +694,9 @@
     }
 
     .sahkan-btn {
-        background: #fdf2fa;
-        color: #c11574;
-        border-color: #fcceee;
+        background: #ecfdf3;
+        color: #027a48;
+        border-color: #abefc6;
     }
 
     .delete-btn {

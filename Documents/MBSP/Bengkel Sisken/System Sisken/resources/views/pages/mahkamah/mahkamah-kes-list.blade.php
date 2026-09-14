@@ -47,6 +47,7 @@
                         <th>Tarikh Bicara Seterusnya</th>
                         <th>Nama Pekerja MBSP</th>
                         <th>Status Kes</th>
+                        <th class="text-center">Fail</th>
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
@@ -86,6 +87,7 @@
                             $namaStaf = $get('NAMA_STAF') ?? '-';
                             $noPekerja = $get('NO_PEKERJA') ?? '-';
                             $statusKes = strtoupper(trim($get('STATUS_KES') ?? 'DALAM PROSES'));
+                            $fileUpload = $get('FILE_UPLOAD');
 
                             $tarikhBicaraRaw = $get('TARIKH_BICARA_SETERUSNYA');
                             $tarikhBicara = !empty($tarikhBicaraRaw)
@@ -138,6 +140,18 @@
                             </td>
 
                             <td class="text-center">
+                                @if(!empty($fileUpload))
+                                    <a href="{{ route('mahkamah-kes-file', $id) }}"
+                                        target="_blank"
+                                        class="file-view-btn">
+                                        Lihat
+                                    </a>
+                                @else
+                                    <span class="text-muted">Tiada</span>
+                                @endif
+                            </td>
+
+                            <td class="text-center">
                                 <div class="action-btn-group">
                                     <button type="button"
                                         class="action-btn info-btn"
@@ -158,7 +172,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="10" class="text-center py-4 text-gray-500">
+                            <td colspan="11" class="text-center py-4 text-gray-500">
                                 Tiada data kes mahkamah.
                             </td>
                         </tr>
@@ -200,6 +214,7 @@
         $tarikhBicara = $get('TARIKH_BICARA_SETERUSNYA');
         $createdAt = $get('CREATED_AT');
         $updatedAt = $get('UPDATED_AT');
+        $fileUpload = $get('FILE_UPLOAD');
         $statusKes = strtoupper(trim($get('STATUS_KES') ?? 'DALAM PROSES'));
 
         $statusKesClass = match($statusKes) {
@@ -316,6 +331,21 @@
                         <span>Penyata Tuntutan</span>
                         <strong>{{ $get('PENYATA_TUNTUTAN') ?? '-' }}</strong>
                     </div>
+
+                    <div class="detail-full">
+                        <span>Fail Lampiran</span>
+                        <strong>
+                            @if(!empty($fileUpload))
+                                <a href="{{ route('mahkamah-kes-file', $id) }}"
+                                    target="_blank"
+                                    class="file-view-btn">
+                                    Lihat Fail
+                                </a>
+                            @else
+                                Tiada
+                            @endif
+                        </strong>
+                    </div>
                 </div>
             </div>
 
@@ -411,7 +441,7 @@
 <style>
     .user-table {
         width: 100% !important;
-        min-width: 1650px;
+        min-width: 1770px;
         border-collapse: separate;
         border-spacing: 0;
         font-size: 13px;
@@ -521,6 +551,15 @@
 
     .user-table th:nth-child(10),
     .user-table td:nth-child(10) {
+        width: 100px !important;
+        min-width: 100px;
+        max-width: 100px;
+        text-align: center;
+        white-space: nowrap;
+    }
+
+    .user-table th:nth-child(11),
+    .user-table td:nth-child(11) {
         width: 120px !important;
         min-width: 120px;
         max-width: 120px;
@@ -601,6 +640,35 @@
         background: #f0f9ff;
         color: #026aa2;
         border-color: #bae6fd;
+    }
+
+    .file-view-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        height: 32px;
+        padding: 0 12px;
+        border-radius: 10px;
+        background: #ecfdf3;
+        color: #027a48;
+        border: 1px solid #abefc6;
+        font-size: 12px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all .2s ease;
+    }
+
+    .file-view-btn:hover {
+        background: #d1fadf;
+        color: #05603a;
+        transform: translateY(-1px);
+    }
+
+    .text-muted {
+        color: #98a2b3;
+        font-size: 12px;
+        font-weight: 600;
     }
 
     .edit-btn {
@@ -845,6 +913,7 @@ $(document).ready(function () {
             { width: '180px' },
             { width: '240px' },
             { width: '180px' },
+            { width: '100px', orderable: false },
             { width: '120px', orderable: false }
         ],
 

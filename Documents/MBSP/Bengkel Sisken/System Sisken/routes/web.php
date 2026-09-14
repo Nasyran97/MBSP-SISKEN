@@ -264,6 +264,7 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::get('/mahkamah-kes/{id}/edit', [MahkamahController::class, 'mahkamahKesEdit'])->name('mahkamah-kes-edit');
     Route::put('/mahkamah-kes/{id}/update', [MahkamahController::class, 'mahkamahKesUpdate'])->name('mahkamah-kes-update');
     Route::get('/mahkamah-kes/{id}/pdf', [MahkamahController::class, 'printMahkamahKesPdf'])->name('mahkamah-kes-pdf');
+    Route::get('/mahkamah-kes/{id}/file', [MahkamahController::class, 'mahkamahKesFile'])->name('mahkamah-kes-file');
 
     // SIDEMENU CUKAI JALAN DAN INSURANS - LUPUS KENDERAAN
     Route::get('/lupus-car-list', [LupusController::class, 'lupusCarList'])->name('lupus-car-list');

@@ -116,6 +116,13 @@ class MenuHelper
             ],
             [
                 'icon' => 'settings',
+                'name' => 'Mekanik',
+                'subItems' => [
+                    ['name' => 'Senarai Kumpulan', 'path' => '/mekanik-group-list', 'pro' => false],
+                ],
+            ],
+            [
+                'icon' => 'settings',
                 'name' => 'Panel Insurans',
                 'subItems' => [
                     ['name' => 'Senarai Panel Insurans', 'path' => '/insurans-panel-list', 'pro' => false],
