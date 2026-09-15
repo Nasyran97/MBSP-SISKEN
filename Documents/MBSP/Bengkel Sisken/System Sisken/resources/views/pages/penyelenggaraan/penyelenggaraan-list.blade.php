@@ -63,7 +63,7 @@
 
                             $jenisKenderaan = $row->JENIS_KENDERAAN ?? $row->jenis_kenderaan ?? '-';
                             $odometer = $row->ODOMETER ?? $row->odometer ?? null;
-                            $kategori = $row->REPAIR_CATEGORY ?? $row->repair_category ?? '-';
+                            $kategori = $row->KATEGORI_PENYELENGGARAAN_NAMA ?? $row->kategori_penyelenggaraan_nama ?? '-';
                             $remark = $row->REPAIR_REMARK ?? $row->repair_remark ?? '-';
 
                             $statusData = strtoupper(trim($row->STATUS_DATA ?? $row->status_data ?? 'ACTIVE'));
@@ -258,7 +258,7 @@
             $jkjgName = $row->JKJG_NAME ?? $row->jkjg_name ?? '-';
             $jkjgNoStaff = $row->JKJG_NOSTAFF ?? $row->jkjg_nostaff ?? null;
 
-            $kategori = $row->REPAIR_CATEGORY ?? $row->repair_category ?? '-';
+            $kategori = $row->KATEGORI_PENYELENGGARAAN_NAMA ?? $row->kategori_penyelenggaraan_nama ?? '-';
             $repairCategory = strtoupper(trim($kategori));
 
             $remark = $row->REPAIR_REMARK ?? $row->repair_remark ?? '-';

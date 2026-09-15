@@ -146,18 +146,22 @@
 
                 <div class="form-group">
                     <label>Jenis Permohonan</label>
-                    <select name="repair_category" id="repair_category" required>
+                    <select name="kategori_penyelenggaraan_id" id="repair_category" required>
                         <option value="" selected disabled>-- Sila Pilih Jenis Permohonan --</option>
-                        <option value="PEMBAIKAN_BERAT" {{ old('repair_category') == 'PEMBAIKAN_BERAT' ? 'selected' : '' }}>Pembaikan Berat</option>
-                        <option value="PEMBAIKAN_RINGAN" {{ old('repair_category') == 'PEMBAIKAN_RINGAN' ? 'selected' : '' }}>Pembaikan Ringan</option>
-                        <option value="SERVIS" {{ old('repair_category') == 'SERVIS' ? 'selected' : '' }}>Servis</option>
-                        <option value="BREAKDOWN" {{ old('repair_category') == 'BREAKDOWN' ? 'selected' : '' }}>Breakdown</option>
-                        <option value="KIMPALAN" {{ old('repair_category') == 'KIMPALAN' ? 'selected' : '' }}>Kimpalan</option>
-                        <option value="PANCIT" {{ old('repair_category') == 'PANCIT' ? 'selected' : '' }}>Pancit</option>
-                        <option value="AIRCOND" {{ old('repair_category') == 'AIRCOND' ? 'selected' : '' }}>Aircond</option>
+                        @foreach($kategoriList as $kategoriOption)
+                            @php
+                                $kategoriOptionId = $kategoriOption->ID ?? $kategoriOption->id ?? null;
+                                $kategoriOptionNama = $kategoriOption->NAMA_KATEGORI ?? $kategoriOption->nama_kategori ?? '';
+                            @endphp
+                            <option value="{{ $kategoriOptionId }}"
+                                data-nama="{{ strtoupper($kategoriOptionNama) }}"
+                                {{ old('kategori_penyelenggaraan_id') == $kategoriOptionId ? 'selected' : '' }}>
+                                {{ $kategoriOptionNama }}
+                            </option>
+                        @endforeach
                     </select>
 
-                    @error('repair_category')
+                    @error('kategori_penyelenggaraan_id')
                         <p class="form-error">{{ $message }}</p>
                     @enderror
                 </div>
@@ -494,8 +498,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function toggleBreakdownLocation() {
-        const selectedCategory = repairCategorySelect
-            ? repairCategorySelect.value.toUpperCase()
+        const selectedOption = repairCategorySelect
+            ? repairCategorySelect.options[repairCategorySelect.selectedIndex]
+            : null;
+
+        const selectedCategory = selectedOption
+            ? (selectedOption.dataset.nama || '').toUpperCase()
             : '';
 
         const isBreakdown = selectedCategory === 'BREAKDOWN';

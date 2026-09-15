@@ -32,6 +32,7 @@ class PenyelenggaraanController extends Controller
                     ->whereRaw("UPPER(p.STATUS_DATA) = 'ACTIVE'");
             })
             ->leftJoin('USERS as pic', 'pic.ID', '=', 'p.USER_ID')
+            ->leftJoin('KATEGORI_PENYELENGGARAAN as kp', 'kp.ID', '=', 'pv.KATEGORI_PENYELENGGARAAN_ID')
             ->select(
                 DB::raw('pv.ID as "ID"'),
                 DB::raw('pv.NO_KERJA as "NO_KERJA"'),
@@ -40,7 +41,8 @@ class PenyelenggaraanController extends Controller
                 DB::raw('pv.JKJG_ID as "JKJG_ID"'),
                 DB::raw('pv.DRIVER_PHONE_NUM as "DRIVER_PHONE_NUM"'),
                 DB::raw('pv.ODOMETER as "ODOMETER"'),
-                DB::raw('pv.REPAIR_CATEGORY as "REPAIR_CATEGORY"'),
+                DB::raw('pv.KATEGORI_PENYELENGGARAAN_ID as "KATEGORI_PENYELENGGARAAN_ID"'),
+                DB::raw('kp.NAMA_KATEGORI as "KATEGORI_PENYELENGGARAAN_NAMA"'),
                 DB::raw('pv.REPAIR_REMARK as "REPAIR_REMARK"'),
                 DB::raw('pv.LOCATION_LATITUDE as "LOCATION_LATITUDE"'),
                 DB::raw('pv.LOCATION_LONGITUDE as "LOCATION_LONGITUDE"'),
@@ -95,13 +97,14 @@ class PenyelenggaraanController extends Controller
 
         $isSuperAdmin = $this->isSuperAdminUser($currentUser);
 
-        [$vehicles, $drivers, $jkjgUsers] = $this->getPenyelenggaraanFormOptions($currentUser, $isSuperAdmin);
+        [$vehicles, $drivers, $jkjgUsers, $kategoriList] = $this->getPenyelenggaraanFormOptions($currentUser, $isSuperAdmin);
 
         return view('pages.penyelenggaraan.penyelenggaraan-add', [
             'title' => 'Permohonan Penyelenggaraan',
             'vehicles' => $vehicles,
             'drivers' => $drivers,
             'jkjgUsers' => $jkjgUsers,
+            'kategoriList' => $kategoriList,
         ]);
     }
 
@@ -135,7 +138,7 @@ class PenyelenggaraanController extends Controller
                 ->with('error', 'Permohonan ini tidak lagi berstatus pending dan tidak boleh dikemaskini.');
         }
 
-        [$vehicles, $drivers, $jkjgUsers] = $this->getPenyelenggaraanFormOptions($currentUser, $isSuperAdmin);
+        [$vehicles, $drivers, $jkjgUsers, $kategoriList] = $this->getPenyelenggaraanFormOptions($currentUser, $isSuperAdmin);
 
         return view('pages.penyelenggaraan.penyelenggaraan-edit', [
             'title' => 'Kemaskini Permohonan Penyelenggaraan',
@@ -143,6 +146,7 @@ class PenyelenggaraanController extends Controller
             'vehicles' => $vehicles,
             'drivers' => $drivers,
             'jkjgUsers' => $jkjgUsers,
+            'kategoriList' => $kategoriList,
         ]);
     }
 
@@ -182,38 +186,43 @@ class PenyelenggaraanController extends Controller
             'driver_phone_num' => 'nullable|string|max:30',
             'jkjg_id' => 'required',
             'odometer' => 'required|numeric|min:0',
-            'repair_category' => 'required|string|in:PEMBAIKAN_BERAT,PEMBAIKAN_RINGAN,SERVIS,BREAKDOWN,KIMPALAN,PANCIT,AIRCOND',
+            'kategori_penyelenggaraan_id' => 'required|exists:oracle.KATEGORI_PENYELENGGARAAN,ID',
             'repair_remark' => 'required|string',
-
-            'location_latitude' => 'nullable|required_if:repair_category,BREAKDOWN|numeric',
-            'location_longitude' => 'nullable|required_if:repair_category,BREAKDOWN|numeric',
-            'location_name' => 'nullable|required_if:repair_category,BREAKDOWN|string|max:500',
         ], [
             'vehicle_id.required' => 'Sila pilih no plat kenderaan.',
             'driver_id.required' => 'Sila pilih pemandu.',
             'odometer.required' => 'Sila masukkan odometer.',
             'odometer.numeric' => 'Odometer mesti dalam format nombor.',
             'jkjg_id.required' => 'Sila pilih JKJG.',
-            'repair_category.required' => 'Sila pilih jenis permohonan.',
-            'repair_category.in' => 'Jenis permohonan tidak sah.',
+            'kategori_penyelenggaraan_id.required' => 'Sila pilih jenis permohonan.',
+            'kategori_penyelenggaraan_id.exists' => 'Jenis permohonan tidak sah.',
             'repair_remark.required' => 'Sila masukkan keterangan kerosakan.',
-
-            'location_latitude.required_if' => 'Sila pilih lokasi breakdown pada peta.',
-            'location_longitude.required_if' => 'Sila pilih lokasi breakdown pada peta.',
-            'location_name.required_if' => 'Sila masukkan catatan lokasi breakdown.',
         ]);
 
-        $repairCategory = strtoupper($request->repair_category);
+        $kategoriPenyelenggaraanId = $request->kategori_penyelenggaraan_id;
+        $kategoriNama = $this->getKategoriPenyelenggaraanNama($kategoriPenyelenggaraanId);
 
-        $locationLatitude = $repairCategory === 'BREAKDOWN'
+        if ($kategoriNama === 'BREAKDOWN') {
+            $request->validate([
+                'location_latitude' => 'required|numeric',
+                'location_longitude' => 'required|numeric',
+                'location_name' => 'required|string|max:500',
+            ], [
+                'location_latitude.required' => 'Sila pilih lokasi breakdown pada peta.',
+                'location_longitude.required' => 'Sila pilih lokasi breakdown pada peta.',
+                'location_name.required' => 'Sila masukkan catatan lokasi breakdown.',
+            ]);
+        }
+
+        $locationLatitude = $kategoriNama === 'BREAKDOWN'
             ? $request->location_latitude
             : null;
 
-        $locationLongitude = $repairCategory === 'BREAKDOWN'
+        $locationLongitude = $kategoriNama === 'BREAKDOWN'
             ? $request->location_longitude
             : null;
 
-        $locationName = $repairCategory === 'BREAKDOWN'
+        $locationName = $kategoriNama === 'BREAKDOWN'
             ? $request->location_name
             : null;
 
@@ -226,7 +235,7 @@ class PenyelenggaraanController extends Controller
                 'DRIVER_PHONE_NUM' => $request->driver_phone_num,
                 'ODOMETER' => $request->odometer,
                 'JKJG_ID' => $request->jkjg_id,
-                'REPAIR_CATEGORY' => $repairCategory,
+                'KATEGORI_PENYELENGGARAAN_ID' => $kategoriPenyelenggaraanId,
                 'REPAIR_REMARK' => $request->repair_remark,
                 'LOCATION_LATITUDE' => $locationLatitude,
                 'LOCATION_LONGITUDE' => $locationLongitude,
@@ -276,7 +285,11 @@ class PenyelenggaraanController extends Controller
         $completed = DB::connection('oracle')
             ->table('PENYELENGGARAAN_VEHICLE')
             ->whereRaw("UPPER(STATUS) = 'IN PROGRESS'")
-            ->whereRaw("UPPER(REPAIR_CATEGORY) = 'PANCIT'")
+            ->whereIn('KATEGORI_PENYELENGGARAAN_ID', function ($query) {
+                $query->select('ID')
+                    ->from('KATEGORI_PENYELENGGARAAN')
+                    ->whereRaw("UPPER(NAMA_KATEGORI) = 'PANCIT'");
+            })
             ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
             ->update([
                 'STATUS' => 'COMPLETED',
@@ -355,9 +368,10 @@ class PenyelenggaraanController extends Controller
             return back()->with('error', 'Permohonan ini bukan dalam status pending.');
         }
 
-        $repairCategory = strtoupper(trim($penyelenggaraan->REPAIR_CATEGORY ?? $penyelenggaraan->repair_category ?? ''));
+        $kategoriId = $penyelenggaraan->KATEGORI_PENYELENGGARAAN_ID ?? $penyelenggaraan->kategori_penyelenggaraan_id ?? null;
+        $kategoriNama = $this->getKategoriPenyelenggaraanNama($kategoriId);
 
-        $requiresPengesahan = in_array($repairCategory, [
+        $requiresPengesahan = in_array($kategoriNama, [
             'BREAKDOWN',
             'SERVIS',
             'PEMBAIKAN_RINGAN',
@@ -448,44 +462,48 @@ class PenyelenggaraanController extends Controller
             'driver_phone_num' => 'nullable|string|max:30',
             'jkjg_id' => 'required',
             'odometer' => 'required|numeric|min:0',
-            'repair_category' => 'required|string|in:PEMBAIKAN_BERAT,PEMBAIKAN_RINGAN,SERVIS,BREAKDOWN,KIMPALAN,PANCIT,AIRCOND',
+            'kategori_penyelenggaraan_id' => 'required|exists:oracle.KATEGORI_PENYELENGGARAAN,ID',
             'repair_remark' => 'required|string',
-
-        
-            'location_latitude' => 'nullable|required_if:repair_category,BREAKDOWN|numeric',
-            'location_longitude' => 'nullable|required_if:repair_category,BREAKDOWN|numeric',
-            'location_name' => 'nullable|required_if:repair_category,BREAKDOWN|string|max:500',
         ], [
             'vehicle_id.required' => 'Sila pilih no plat kenderaan.',
             'driver_id.required' => 'Sila pilih pemandu.',
             'odometer.required' => 'Sila masukkan odometer.',
             'odometer.numeric' => 'Odometer mesti dalam format nombor.',
             'jkjg_id.required' => 'Sila pilih JKJG.',
-            'repair_category.required' => 'Sila pilih jenis permohonan.',
-            'repair_category.in' => 'Jenis permohonan tidak sah.',
+            'kategori_penyelenggaraan_id.required' => 'Sila pilih jenis permohonan.',
+            'kategori_penyelenggaraan_id.exists' => 'Jenis permohonan tidak sah.',
             'repair_remark.required' => 'Sila masukkan keterangan kerosakan.',
-        
-            'location_latitude.required_if' => 'Sila pilih lokasi breakdown pada peta.',
-            'location_longitude.required_if' => 'Sila pilih lokasi breakdown pada peta.',
-            'location_name.required_if' => 'Sila masukkan catatan lokasi breakdown.',
         ]);
-    
+
         $noKerja = 'PNY-' . date('Ymd') . '-' . str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT);
 
-        $repairCategory = strtoupper($request->repair_category);
+        $kategoriPenyelenggaraanId = $request->kategori_penyelenggaraan_id;
+        $kategoriNama = $this->getKategoriPenyelenggaraanNama($kategoriPenyelenggaraanId);
 
-        $locationLatitude = $repairCategory === 'BREAKDOWN'
+        if ($kategoriNama === 'BREAKDOWN') {
+            $request->validate([
+                'location_latitude' => 'required|numeric',
+                'location_longitude' => 'required|numeric',
+                'location_name' => 'required|string|max:500',
+            ], [
+                'location_latitude.required' => 'Sila pilih lokasi breakdown pada peta.',
+                'location_longitude.required' => 'Sila pilih lokasi breakdown pada peta.',
+                'location_name.required' => 'Sila masukkan catatan lokasi breakdown.',
+            ]);
+        }
+
+        $locationLatitude = $kategoriNama === 'BREAKDOWN'
             ? $request->location_latitude
             : null;
 
-        $locationLongitude = $repairCategory === 'BREAKDOWN'
+        $locationLongitude = $kategoriNama === 'BREAKDOWN'
             ? $request->location_longitude
             : null;
 
-        $locationName = $repairCategory === 'BREAKDOWN'
+        $locationName = $kategoriNama === 'BREAKDOWN'
             ? $request->location_name
             : null;
-    
+
         DB::connection('oracle')
             ->table('PENYELENGGARAAN_VEHICLE')
             ->insert([
@@ -495,7 +513,7 @@ class PenyelenggaraanController extends Controller
                 'DRIVER_PHONE_NUM' => $request->driver_phone_num,
                 'ODOMETER' => $request->odometer,
                 'JKJG_ID' => $request->jkjg_id,
-                'REPAIR_CATEGORY' => $repairCategory,
+                'KATEGORI_PENYELENGGARAAN_ID' => $kategoriPenyelenggaraanId,
                 'REPAIR_REMARK' => $request->repair_remark,
                 'LOCATION_LATITUDE' => $locationLatitude,
                 'LOCATION_LONGITUDE' => $locationLongitude,
@@ -580,7 +598,30 @@ class PenyelenggaraanController extends Controller
             ->orderBy('u.NAMA')
             ->get();
 
-        return [$vehicles, $drivers, $jkjgUsers];
+        $kategoriList = DB::connection('oracle')
+            ->table('KATEGORI_PENYELENGGARAAN')
+            ->select(
+                DB::raw('ID as "ID"'),
+                DB::raw('NAMA_KATEGORI as "NAMA_KATEGORI"')
+            )
+            ->orderBy('NAMA_KATEGORI')
+            ->get();
+
+        return [$vehicles, $drivers, $jkjgUsers, $kategoriList];
+    }
+
+    private function getKategoriPenyelenggaraanNama($kategoriId)
+    {
+        if (!$kategoriId) {
+            return '';
+        }
+
+        $nama = DB::connection('oracle')
+            ->table('KATEGORI_PENYELENGGARAAN')
+            ->where('ID', $kategoriId)
+            ->value('NAMA_KATEGORI');
+
+        return strtoupper(trim($nama ?? ''));
     }
 
     private function getCurrentUser()

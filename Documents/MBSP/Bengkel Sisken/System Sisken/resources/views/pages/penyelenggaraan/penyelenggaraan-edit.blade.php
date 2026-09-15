@@ -20,7 +20,7 @@
         $selectedVehicleId = old('vehicle_id', $penyelenggaraan->VEHICLE_ID ?? $penyelenggaraan->vehicle_id ?? null);
         $selectedDriverId = old('driver_id', $penyelenggaraan->DRIVER_ID ?? $penyelenggaraan->driver_id ?? null);
         $selectedJkjgId = old('jkjg_id', $penyelenggaraan->JKJG_ID ?? $penyelenggaraan->jkjg_id ?? null);
-        $selectedRepairCategory = old('repair_category', $penyelenggaraan->REPAIR_CATEGORY ?? $penyelenggaraan->repair_category ?? '');
+        $selectedKategoriPenyelenggaraanId = old('kategori_penyelenggaraan_id', $penyelenggaraan->KATEGORI_PENYELENGGARAAN_ID ?? $penyelenggaraan->kategori_penyelenggaraan_id ?? '');
     @endphp
 
     <x-common.component-card title="Borang Kemaskini Penyelenggaraan">
@@ -154,18 +154,22 @@
 
                 <div class="form-group">
                     <label>Jenis Permohonan</label>
-                    <select name="repair_category" id="repair_category" required>
+                    <select name="kategori_penyelenggaraan_id" id="repair_category" required>
                         <option value="" disabled>-- Sila Pilih Jenis Permohonan --</option>
-                        <option value="PEMBAIKAN_BERAT" {{ $selectedRepairCategory == 'PEMBAIKAN_BERAT' ? 'selected' : '' }}>Pembaikan Berat</option>
-                        <option value="PEMBAIKAN_RINGAN" {{ $selectedRepairCategory == 'PEMBAIKAN_RINGAN' ? 'selected' : '' }}>Pembaikan Ringan</option>
-                        <option value="SERVIS" {{ $selectedRepairCategory == 'SERVIS' ? 'selected' : '' }}>Servis</option>
-                        <option value="BREAKDOWN" {{ $selectedRepairCategory == 'BREAKDOWN' ? 'selected' : '' }}>Breakdown</option>
-                        <option value="KIMPALAN" {{ $selectedRepairCategory == 'KIMPALAN' ? 'selected' : '' }}>Kimpalan</option>
-                        <option value="PANCIT" {{ $selectedRepairCategory == 'PANCIT' ? 'selected' : '' }}>Pancit</option>
-                        <option value="AIRCOND" {{ $selectedRepairCategory == 'AIRCOND' ? 'selected' : '' }}>Aircond</option>
+                        @foreach($kategoriList as $kategoriOption)
+                            @php
+                                $kategoriOptionId = $kategoriOption->ID ?? $kategoriOption->id ?? null;
+                                $kategoriOptionNama = $kategoriOption->NAMA_KATEGORI ?? $kategoriOption->nama_kategori ?? '';
+                            @endphp
+                            <option value="{{ $kategoriOptionId }}"
+                                data-nama="{{ strtoupper($kategoriOptionNama) }}"
+                                {{ $selectedKategoriPenyelenggaraanId == $kategoriOptionId ? 'selected' : '' }}>
+                                {{ $kategoriOptionNama }}
+                            </option>
+                        @endforeach
                     </select>
 
-                    @error('repair_category')
+                    @error('kategori_penyelenggaraan_id')
                         <p class="form-error">{{ $message }}</p>
                     @enderror
                 </div>
@@ -508,8 +512,12 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function toggleBreakdownLocation(resetOnHide) {
-        const selectedCategory = repairCategorySelect
-            ? repairCategorySelect.value.toUpperCase()
+        const selectedOption = repairCategorySelect
+            ? repairCategorySelect.options[repairCategorySelect.selectedIndex]
+            : null;
+
+        const selectedCategory = selectedOption
+            ? (selectedOption.dataset.nama || '').toUpperCase()
             : '';
 
         const isBreakdown = selectedCategory === 'BREAKDOWN';
