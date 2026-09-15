@@ -10,6 +10,7 @@ use App\Http\Controllers\KenderaanController;
 use App\Http\Controllers\RoadTaxController;
 use App\Http\Controllers\InsuransController;
 use App\Http\Controllers\PengawasController;
+use App\Http\Controllers\MekanikGroupController;
 use App\Http\Controllers\TuntutanController;
 use App\Http\Controllers\MahkamahController;
 use App\Http\Controllers\LupusController;
@@ -132,6 +133,17 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::post('/pengawas-activate/{userId}', [PengawasController::class, 'activate'])->name('pengawas-activate');
     Route::get('/pengawas/{userId}/edit', [PengawasController::class, 'edit'])->name('pengawas-edit');
     Route::put('/pengawas/{userId}/update-vehicle', [PengawasController::class, 'updateVehicle'])->name('pengawas-update-vehicle');
+
+    //SIDEMENU TETAPAN - MEKANIK
+    Route::get('/mekanik-group-list', [MekanikGroupController::class, 'list'])->name('mekanik-group-list');
+    Route::get('/mekanik-group-add', [MekanikGroupController::class, 'create'])->name('mekanik-group-add');
+    Route::post('/mekanik-group-store', [MekanikGroupController::class, 'store'])->name('mekanik-group-store');
+    Route::post('/mekanik-group-delete/{id}', [MekanikGroupController::class, 'delete'])->name('mekanik-group-delete');
+    Route::get('/mekanik-group/{id}/edit', [MekanikGroupController::class, 'edit'])->name('mekanik-group-edit');
+    Route::put('/mekanik-group/{id}/update', [MekanikGroupController::class, 'update'])->name('mekanik-group-update');
+    Route::post('/mekanik-group/{id}/member-add', [MekanikGroupController::class, 'addMember'])->name('mekanik-group-member-add');
+    Route::post('/mekanik-group/{groupId}/member/{memberId}/remove', [MekanikGroupController::class, 'removeMember'])->name('mekanik-group-member-remove');
+    Route::post('/mekanik-group/{groupId}/member/{memberId}/set-leader', [MekanikGroupController::class, 'setLeader'])->name('mekanik-group-member-set-leader');
 
     //SIDEMENU TETEPAN - REKOD KENDERAAN
     Route::get('/rekod-car-list', [KenderaanController::class, 'carList'])->name('rekod-car-list');
