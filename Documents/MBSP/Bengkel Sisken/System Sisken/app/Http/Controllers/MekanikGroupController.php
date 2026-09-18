@@ -10,6 +10,136 @@ class MekanikGroupController extends Controller
     // Only these mekanik categories are group-based (MAINTENANCE is individual-based).
     private const GROUP_CATEGORIES = ['SERVICE', 'BREAKDOWN', 'WELDING'];
 
+    // MAINTENANCE tasks (Pembaikan Berat / Pembaikan Ringan) are assigned to one mekanik at a time, not a group.
+    private const INDIVIDUAL_CATEGORIES = ['MAINTENANCE'];
+
+    public function listIndividual()
+    {
+        $mekaniks = $this->getActiveIndividualPool();
+
+        // A mekanik can only belong to one group or be an individual mekanik, not both.
+        $takenUserIds = array_merge(
+            $this->getAllActiveGroupMemberUserIds(),
+            $this->getAllActiveIndividualPoolUserIds()
+        );
+
+        $availableUsers = DB::connection('oracle')
+            ->table('USERS as u')
+            ->select(
+                DB::raw('u.ID as "ID"'),
+                DB::raw('u.NOSTAFF as "NOSTAFF"'),
+                DB::raw('u.NAMA as "NAMA"'),
+                DB::raw('u.JABATAN as "JABATAN"'),
+                DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
+            )
+            ->whereRaw("UPPER(u.STATUS_DATA) = 'ACTIVE'")
+            ->when(!empty($takenUserIds), function ($query) use ($takenUserIds) {
+                $query->whereNotIn('u.ID', $takenUserIds);
+            })
+            ->orderBy('u.NAMA')
+            ->get()
+            ->filter(fn ($u) => $this->hasPenyelenggaraanRole50($u))
+            ->values();
+
+        $categoryNames = DB::connection('oracle')
+            ->table('KATEGORI_PENYELENGGARAAN')
+            ->select(DB::raw('NAMA_KATEGORI as "NAMA_KATEGORI"'))
+            ->whereIn('MEKANIK_CATEGORY', self::INDIVIDUAL_CATEGORIES)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->orderBy('NAMA_KATEGORI')
+            ->get()
+            ->map(fn ($c) => $c->NAMA_KATEGORI ?? $c->nama_kategori ?? null)
+            ->filter()
+            ->values();
+
+        return view('pages.mekanik.mekanik-individual-list', [
+            'title' => 'Mekanik Individu (Maintenance)',
+            'mekaniks' => $mekaniks,
+            'availableUsers' => $availableUsers,
+            'categoryNames' => $categoryNames,
+        ]);
+    }
+
+    public function storeIndividual(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|array|min:1',
+            'user_id.*' => 'required',
+        ], [
+            'user_id.required' => 'Sila pilih sekurang-kurangnya seorang mekanik.',
+            'user_id.array' => 'Format pilihan mekanik tidak sah.',
+            'user_id.min' => 'Sila pilih sekurang-kurangnya seorang mekanik.',
+        ]);
+
+        $userIds = collect($request->user_id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($userIds->isEmpty()) {
+            return back()
+                ->withErrors(['user_id' => 'Sila pilih sekurang-kurangnya seorang mekanik.'])
+                ->withInput();
+        }
+
+        // A mekanik can only belong to one group or be an individual mekanik, not both.
+        $alreadyTaken = DB::connection('oracle')
+            ->table('MEKANIK_GROUP_MEMBER')
+            ->whereIn('USER_ID', $userIds->toArray())
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->exists()
+            || DB::connection('oracle')
+                ->table('MEKANIK_INDIVIDUAL_POOL')
+                ->whereIn('USER_ID', $userIds->toArray())
+                ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+                ->exists();
+
+        if ($alreadyTaken) {
+            return back()
+                ->withErrors(['user_id' => 'Terdapat pengguna yang telah menjadi mekanik kumpulan atau individu sedia ada.'])
+                ->withInput();
+        }
+
+        $now = now('Asia/Kuala_Lumpur');
+        $createdBy = session('nostaff') ?? 'SYSTEM';
+
+        $insertData = $userIds->map(fn ($userId) => [
+            'CATEGORY_CODE' => self::INDIVIDUAL_CATEGORIES[0],
+            'USER_ID' => $userId,
+            'AUTO_ASSIGN_ENABLED' => 'Y',
+            'STATUS_DATA' => 'ACTIVE',
+            'CREATED_BY' => $createdBy,
+            'CREATED_AT' => $now,
+        ])->toArray();
+
+        DB::connection('oracle')
+            ->table('MEKANIK_INDIVIDUAL_POOL')
+            ->insert($insertData);
+
+        return redirect()
+            ->route('mekanik-individual-list')
+            ->with('success', 'Mekanik individu berjaya ditambah.');
+    }
+
+    public function removeIndividual($id)
+    {
+        $affected = DB::connection('oracle')
+            ->table('MEKANIK_INDIVIDUAL_POOL')
+            ->where('ID', $id)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->update([
+                'STATUS_DATA' => 'DELETE',
+                'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
+                'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
+            ]);
+
+        if ($affected === 0) {
+            return back()->with('error', 'Mekanik individu tidak dijumpai atau telah dikeluarkan.');
+        }
+
+        return back()->with('success', 'Mekanik individu berjaya dikeluarkan.');
+    }
+
     public function list()
     {
         $groups = DB::connection('oracle')
@@ -146,11 +276,12 @@ class MekanikGroupController extends Controller
 
         $members = $this->getActiveMembers($id);
 
-        $currentUserIds = $members
-            ->map(fn ($m) => $m->USER_ID ?? $m->user_id ?? null)
-            ->filter()
-            ->values()
-            ->toArray();
+        // A mekanik can only belong to one group or be an individual mekanik, so
+        // exclude anyone already active in ANY group or the individual pool.
+        $takenUserIds = array_merge(
+            $this->getAllActiveGroupMemberUserIds(),
+            $this->getAllActiveIndividualPoolUserIds()
+        );
 
         $availableUsers = DB::connection('oracle')
             ->table('USERS as u')
@@ -158,14 +289,17 @@ class MekanikGroupController extends Controller
                 DB::raw('u.ID as "ID"'),
                 DB::raw('u.NOSTAFF as "NOSTAFF"'),
                 DB::raw('u.NAMA as "NAMA"'),
-                DB::raw('u.JABATAN as "JABATAN"')
+                DB::raw('u.JABATAN as "JABATAN"'),
+                DB::raw('u.MODULE_ROLE as "MODULE_ROLE"')
             )
             ->whereRaw("UPPER(u.STATUS_DATA) = 'ACTIVE'")
-            ->when(!empty($currentUserIds), function ($query) use ($currentUserIds) {
-                $query->whereNotIn('u.ID', $currentUserIds);
+            ->when(!empty($takenUserIds), function ($query) use ($takenUserIds) {
+                $query->whereNotIn('u.ID', $takenUserIds);
             })
             ->orderBy('u.NAMA')
-            ->get();
+            ->get()
+            ->filter(fn ($u) => $this->hasPenyelenggaraanRole50($u))
+            ->values();
 
         $categories = $this->getCategoryNameMap();
         $categoryCode = $group->CATEGORY_CODE ?? $group->category_code ?? null;
@@ -273,16 +407,22 @@ class MekanikGroupController extends Controller
                 ->withInput();
         }
 
+        // A mekanik can only belong to one group or be an individual mekanik, so
+        // block re-adding anyone already active in another group or the individual pool.
         $alreadyActive = DB::connection('oracle')
             ->table('MEKANIK_GROUP_MEMBER')
-            ->where('GROUP_ID', $id)
             ->whereIn('USER_ID', $userIds->toArray())
             ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
-            ->exists();
+            ->exists()
+            || DB::connection('oracle')
+                ->table('MEKANIK_INDIVIDUAL_POOL')
+                ->whereIn('USER_ID', $userIds->toArray())
+                ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+                ->exists();
 
         if ($alreadyActive) {
             return back()
-                ->withErrors(['user_id' => 'Terdapat pengguna yang telah menjadi ahli aktif kumpulan ini.'])
+                ->withErrors(['user_id' => 'Terdapat pengguna yang telah menjadi ahli aktif kumpulan lain atau mekanik individu.'])
                 ->withInput();
         }
 
@@ -405,6 +545,52 @@ class MekanikGroupController extends Controller
             ->first();
     }
 
+    private function getAllActiveGroupMemberUserIds()
+    {
+        return DB::connection('oracle')
+            ->table('MEKANIK_GROUP_MEMBER')
+            ->select(DB::raw('USER_ID as "USER_ID"'))
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->get()
+            ->map(fn ($m) => $m->USER_ID ?? $m->user_id ?? null)
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+    }
+
+    private function getAllActiveIndividualPoolUserIds()
+    {
+        return DB::connection('oracle')
+            ->table('MEKANIK_INDIVIDUAL_POOL')
+            ->select(DB::raw('USER_ID as "USER_ID"'))
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->get()
+            ->map(fn ($m) => $m->USER_ID ?? $m->user_id ?? null)
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+    }
+
+    private function getActiveIndividualPool()
+    {
+        return DB::connection('oracle')
+            ->table('MEKANIK_INDIVIDUAL_POOL as pool')
+            ->leftJoin('USERS as u', 'u.ID', '=', 'pool.USER_ID')
+            ->select(
+                DB::raw('pool.ID as "ID"'),
+                DB::raw('pool.USER_ID as "USER_ID"'),
+                DB::raw('pool.AUTO_ASSIGN_ENABLED as "AUTO_ASSIGN_ENABLED"'),
+                DB::raw('u.NOSTAFF as "NOSTAFF"'),
+                DB::raw('u.NAMA as "NAMA"'),
+                DB::raw('u.JABATAN as "JABATAN"')
+            )
+            ->whereRaw("UPPER(pool.STATUS_DATA) = 'ACTIVE'")
+            ->orderBy('u.NAMA')
+            ->get();
+    }
+
     private function getActiveMembers($groupId)
     {
         return DB::connection('oracle')
@@ -425,6 +611,27 @@ class MekanikGroupController extends Controller
             ->orderByDesc(DB::raw("UPPER(m.IS_LEADER)"))
             ->orderBy('u.NAMA')
             ->get();
+    }
+
+    private function hasPenyelenggaraanRole50($user)
+    {
+        $moduleRoleRaw = $user->MODULE_ROLE ?? $user->module_role ?? '[]';
+        $moduleRoles = json_decode($moduleRoleRaw, true);
+
+        if (!is_array($moduleRoles)) {
+            return false;
+        }
+
+        foreach ($moduleRoles as $item) {
+            $module = strtoupper(trim($item['module'] ?? ''));
+            $role = (int) ($item['role'] ?? 0);
+
+            if ($module === 'PENYELENGGARAAN' && $role === 50) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function getGroupCategories()

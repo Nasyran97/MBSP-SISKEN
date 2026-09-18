@@ -40,6 +40,7 @@
                         <th>Jenis Kenderaan</th>
                         <th>Odometer</th>
                         <th>Kategori</th>
+                        <th>Mekanik/Kumpulan</th>
                         <th>Remark</th>
                         <th>Status</th>
                         <th class="text-center">Action</th>
@@ -66,6 +67,21 @@
                             $kategori = $row->KATEGORI_PENYELENGGARAAN_NAMA ?? $row->kategori_penyelenggaraan_nama ?? '-';
                             $remark = $row->REPAIR_REMARK ?? $row->repair_remark ?? '-';
 
+                            $assignmentType = strtoupper(trim($row->ASSIGNMENT_TYPE ?? $row->assignment_type ?? ''));
+                            $assignedGroupId = $row->ASSIGNED_GROUP_ID ?? $row->assigned_group_id ?? null;
+                            $assignedGroupName = $row->ASSIGNED_GROUP_NAME ?? $row->assigned_group_name ?? null;
+                            $assignedUserId = $row->ASSIGNED_USER_ID ?? $row->assigned_user_id ?? null;
+                            $assignedMekanikName = $row->ASSIGNED_MEKANIK_NAME ?? $row->assigned_mekanik_name ?? null;
+                            $assignedMekanikNoStaff = $row->ASSIGNED_MEKANIK_NOSTAFF ?? $row->assigned_mekanik_nostaff ?? null;
+
+                            $assignedDisplay = match($assignmentType) {
+                                'GROUP' => $assignedGroupName ?: '-',
+                                'INDIVIDUAL' => $assignedMekanikName
+                                    ? trim(($assignedMekanikNoStaff ? $assignedMekanikNoStaff . ' - ' : '') . $assignedMekanikName)
+                                    : '-',
+                                default => '-',
+                            };
+
                             $statusData = strtoupper(trim($row->STATUS_DATA ?? $row->status_data ?? 'ACTIVE'));
                             $isDeletedRow = $statusData === 'DELETE';
 
@@ -89,6 +105,18 @@
                             $canEditRow = $canManageRow && $status === 'PENDING';
                             $canDeleteRow = $canManageRow && !in_array($status, ['COMPLETED', 'COMPLETE', 'SELESAI']);
                             $canConfirmRow = !$isDeletedRow && $status === 'PENGESAHAN' && $canConfirmPenyelenggaraan;
+
+                            $isLeaderOfAssignedGroup = $assignmentType === 'GROUP'
+                                && $assignedGroupId
+                                && in_array($assignedGroupId, $leaderGroupIds ?? []);
+
+                            $isAssignedIndividualSelf = $assignmentType === 'INDIVIDUAL'
+                                && $assignedUserId
+                                && (string) $assignedUserId === (string) ($currentUserId ?? '');
+
+                            $canMarkDoneRow = !$isDeletedRow
+                                && $status === 'IN PROGRESS'
+                                && ($isSuperAdmin || $isLeaderOfAssignedGroup || $isAssignedIndividualSelf);
                         @endphp
 
                         <tr>
@@ -130,6 +158,18 @@
                                 <span class="category-badge">
                                     {{ str_replace('_', ' ', $kategori) }}
                                 </span>
+                            </td>
+
+                            <td class="cell-text">
+                                @if($assignedDisplay !== '-')
+                                    <button type="button"
+                                            class="mekanik-link"
+                                            onclick="openPenyelenggaraanModal('mekanik-modal-{{ $id }}')">
+                                        {{ $assignedDisplay }}
+                                    </button>
+                                @else
+                                    {{ $assignedDisplay }}
+                                @endif
                             </td>
 
                             <td class="cell-text">
@@ -191,6 +231,25 @@
                                                 </svg>
                                             </button>
                                         </form>
+                                    @endif
+
+                                    @if($canMarkDoneRow)
+                                        <form id="mark-done-form-{{ $id }}" method="POST" action="{{ route('penyelenggaraan-mark-done', $id) }}">
+                                            @csrf
+                                            <input type="hidden" name="remark_done" id="mark-done-remark-{{ $id }}">
+                                        </form>
+                                        <button type="button"
+                                                class="action-btn selesai-btn"
+                                                title="Tandakan Selesai"
+                                                onclick="markPenyelenggaraanDone({{ $id }})">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M5 12L10 17L19 8"
+                                                      stroke="currentColor"
+                                                      stroke-width="2.2"
+                                                      stroke-linecap="round"
+                                                      stroke-linejoin="round" />
+                                            </svg>
+                                        </button>
                                     @endif
 
                                     @if($canEditRow)
@@ -261,7 +320,28 @@
             $kategori = $row->KATEGORI_PENYELENGGARAAN_NAMA ?? $row->kategori_penyelenggaraan_nama ?? '-';
             $repairCategory = strtoupper(trim($kategori));
 
+            $assignmentType = strtoupper(trim($row->ASSIGNMENT_TYPE ?? $row->assignment_type ?? ''));
+            $assignedGroupId = $row->ASSIGNED_GROUP_ID ?? $row->assigned_group_id ?? null;
+            $assignedGroupName = $row->ASSIGNED_GROUP_NAME ?? $row->assigned_group_name ?? null;
+            $assignedMekanikName = $row->ASSIGNED_MEKANIK_NAME ?? $row->assigned_mekanik_name ?? null;
+            $assignedMekanikNoStaff = $row->ASSIGNED_MEKANIK_NOSTAFF ?? $row->assigned_mekanik_nostaff ?? null;
+            $assignedMekanikJabatan = $row->ASSIGNED_MEKANIK_JABATAN ?? $row->assigned_mekanik_jabatan ?? null;
+
+            $assignedDisplay = match($assignmentType) {
+                'GROUP' => $assignedGroupName ?: '-',
+                'INDIVIDUAL' => $assignedMekanikName
+                    ? trim(($assignedMekanikNoStaff ? $assignedMekanikNoStaff . ' - ' : '') . $assignedMekanikName)
+                    : '-',
+                default => '-',
+            };
+
+            $assignedGroupMembers = $assignmentType === 'GROUP' && $assignedGroupId
+                ? $groupMembersMap->get($assignedGroupId, collect())
+                : collect();
+
             $remark = $row->REPAIR_REMARK ?? $row->repair_remark ?? '-';
+            $remarkDone = $row->REMARK_DONE ?? $row->remark_done ?? null;
+            $completedAt = $row->COMPLETED_AT ?? $row->completed_at ?? null;
 
             $statusData = strtoupper(trim($row->STATUS_DATA ?? $row->status_data ?? 'ACTIVE'));
             $status = $statusData === 'DELETE'
@@ -377,6 +457,11 @@
                     </div>
 
                     <div>
+                        <span>Mekanik/Kumpulan Ditugaskan</span>
+                        <strong>{{ $assignedDisplay }}</strong>
+                    </div>
+
+                    <div>
                         <span>Status</span>
                         <strong>{{ $status }}</strong>
                     </div>
@@ -389,6 +474,11 @@
                     <div>
                         <span>Tarikh Pengesahan</span>
                         <strong>{{ $pengesahanAt ? $formatDate($pengesahanAt) : '-' }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Tarikh Selesai</span>
+                        <strong>{{ $completedAt ? $formatDate($completedAt) : '-' }}</strong>
                     </div>
 
                     <div>
@@ -419,7 +509,92 @@
                         <span>Catatan / Remark</span>
                         <strong>{{ $remark }}</strong>
                     </div>
+
+                    @if($remarkDone)
+                        <div class="detail-full">
+                            <span>Catatan Selesai</span>
+                            <strong>{{ $remarkDone }}</strong>
+                        </div>
+                    @endif
                 </div>
+            </div>
+        </div>
+
+        <div id="mekanik-modal-{{ $id }}" class="penyelenggaraan-modal hidden">
+            <div class="penyelenggaraan-modal-overlay" onclick="closePenyelenggaraanModal('mekanik-modal-{{ $id }}')"></div>
+
+            <div class="penyelenggaraan-modal-card mekanik-modal-card">
+                <div class="flex items-center justify-between border-b border-gray-200 pb-4 mb-4">
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-900">
+                            @if($assignmentType === 'GROUP')
+                                Ahli Kumpulan Mekanik
+                            @else
+                                Mekanik Ditugaskan
+                            @endif
+                        </h3>
+                        <p class="text-sm text-gray-500">
+                            {{ $noPlat }} / {{ $noKerja }}
+                        </p>
+                    </div>
+
+                    <button type="button"
+                            class="modal-close-btn"
+                            onclick="closePenyelenggaraanModal('mekanik-modal-{{ $id }}')">
+                        ×
+                    </button>
+                </div>
+
+                @if($assignmentType === 'GROUP')
+                    <div class="mb-3">
+                        <span class="text-xs font-semibold uppercase text-gray-500">Kumpulan</span>
+                        <div class="text-base font-bold text-gray-900">{{ $assignedGroupName ?: '-' }}</div>
+                    </div>
+
+                    @if($assignedGroupMembers->isNotEmpty())
+                        <div class="mekanik-member-list">
+                            @foreach($assignedGroupMembers as $member)
+                                @php
+                                    $memberName = $member->NAMA ?? $member->nama ?? '-';
+                                    $memberNoStaff = $member->NOSTAFF ?? $member->nostaff ?? null;
+                                    $memberJabatan = $member->JABATAN ?? $member->jabatan ?? null;
+                                    $memberIsLeader = strtoupper(trim($member->IS_LEADER ?? $member->is_leader ?? '')) === 'Y';
+                                @endphp
+
+                                <div class="mekanik-member-row">
+                                    <div>
+                                        <div class="font-semibold text-gray-900">
+                                            {{ $memberName }}
+                                            @if($memberIsLeader)
+                                                <span class="leader-badge">Ketua</span>
+                                            @endif
+                                        </div>
+                                        <div class="text-xs text-gray-500">
+                                            {{ $memberNoStaff }}{{ $memberJabatan ? ' - ' . $memberJabatan : '' }}
+                                        </div>
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <p class="text-sm text-gray-500">Tiada ahli aktif dalam kumpulan ini.</p>
+                    @endif
+                @elseif($assignmentType === 'INDIVIDUAL')
+                    <div class="mekanik-member-list">
+                        <div class="mekanik-member-row">
+                            <div>
+                                <div class="font-semibold text-gray-900">
+                                    {{ $assignedMekanikName ?: '-' }}
+                                </div>
+                                <div class="text-xs text-gray-500">
+                                    {{ $assignedMekanikNoStaff }}{{ $assignedMekanikJabatan ? ' - ' . $assignedMekanikJabatan : '' }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                @else
+                    <p class="text-sm text-gray-500">Belum ditugaskan.</p>
+                @endif
             </div>
         </div>
     @endforeach
@@ -492,7 +667,7 @@
     }
 
     .penyelenggaraan-table {
-        min-width: 1820px;
+        min-width: 2030px;
         table-layout: fixed;
     }
 
@@ -565,18 +740,24 @@
 
     .penyelenggaraan-table th:nth-child(9),
     .penyelenggaraan-table td:nth-child(9) {
-        width: 150px !important;
-        text-align: center;
+        width: 210px !important;
+        white-space: normal;
     }
 
     .penyelenggaraan-table th:nth-child(10),
     .penyelenggaraan-table td:nth-child(10) {
-        width: 120px !important;
+        width: 150px !important;
         text-align: center;
     }
 
     .penyelenggaraan-table th:nth-child(11),
     .penyelenggaraan-table td:nth-child(11) {
+        width: 120px !important;
+        text-align: center;
+    }
+
+    .penyelenggaraan-table th:nth-child(12),
+    .penyelenggaraan-table td:nth-child(12) {
         width: 190px !important;
         text-align: center;
     }
@@ -699,6 +880,12 @@
         border-color: #abefc6;
     }
 
+    .selesai-btn {
+        background: #eff6ff;
+        color: #1d4ed8;
+        border-color: #bfdbfe;
+    }
+
     .delete-btn {
         background: #fef3f2;
         color: #b42318;
@@ -779,6 +966,54 @@
 
     .detail-full {
         grid-column: span 2 / span 2;
+    }
+
+    .mekanik-link {
+        background: none;
+        border: none;
+        padding: 0;
+        color: #1d4ed8;
+        font-weight: 600;
+        text-decoration: underline;
+        cursor: pointer;
+        font: inherit;
+        text-align: left;
+    }
+
+    .mekanik-link:hover {
+        color: #1e40af;
+    }
+
+    .mekanik-modal-card {
+        width: min(500px, calc(100% - 32px));
+    }
+
+    .mekanik-member-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .mekanik-member-row {
+        background: #f8fafc;
+        border: 1px solid #eef1f4;
+        border-radius: 12px;
+        padding: 12px 14px;
+    }
+
+    .leader-badge {
+        display: inline-flex;
+        align-items: center;
+        margin-left: 6px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #fffaeb;
+        color: #b54708;
+        border: 1px solid #fedf89;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .3px;
     }
 
     .dataTables_scrollHeadInner,
@@ -887,10 +1122,28 @@ function initBreakdownModalMap(modal) {
         attribution: '&copy; OpenStreetMap'
     }).addTo(map);
 
-    L.marker([lat, lng])
+    const directionsUrl = 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lng;
+
+    const popupContent = document.createElement('div');
+    const titleEl = document.createElement('strong');
+    titleEl.textContent = title;
+    const linkEl = document.createElement('a');
+    linkEl.href = directionsUrl;
+    linkEl.target = '_blank';
+    linkEl.rel = 'noopener';
+    linkEl.textContent = 'Buka arah di Google Maps';
+    popupContent.appendChild(titleEl);
+    popupContent.appendChild(document.createElement('br'));
+    popupContent.appendChild(linkEl);
+
+    const marker = L.marker([lat, lng], { title: 'Klik untuk buka arah di Google Maps' })
         .addTo(map)
-        .bindPopup(title)
+        .bindPopup(popupContent)
         .openPopup();
+
+    marker.on('click', function () {
+        window.open(directionsUrl, '_blank', 'noopener');
+    });
 
     breakdownModalMaps[mapId] = map;
 
@@ -914,6 +1167,28 @@ function closePenyelenggaraanModal(id) {
     if (!openedModal) {
         document.body.style.overflow = '';
     }
+}
+
+function markPenyelenggaraanDone(id) {
+    Swal.fire({
+        title: 'Tandakan Selesai',
+        input: 'textarea',
+        inputLabel: 'Catatan kerja yang telah dilakukan',
+        inputPlaceholder: 'Masukkan catatan...',
+        showCancelButton: true,
+        confirmButtonText: 'Hantar',
+        cancelButtonText: 'Batal',
+        inputValidator: function (value) {
+            if (!value || !value.trim()) {
+                return 'Sila masukkan catatan.';
+            }
+        }
+    }).then(function (result) {
+        if (result.isConfirmed) {
+            document.getElementById('mark-done-remark-' + id).value = result.value;
+            document.getElementById('mark-done-form-' + id).submit();
+        }
+    });
 }
 
 document.addEventListener('keydown', function (event) {
@@ -948,6 +1223,7 @@ $(document).ready(function () {
             { width: '200px' },
             { width: '130px' },
             { width: '180px' },
+            { width: '210px' },
             { width: '300px' },
             { width: '150px' },
             { width: '190px', orderable: false }
@@ -993,7 +1269,7 @@ $(document).ready(function () {
 
     function applyStatusTab(tab) {
         penyelenggaraanTable
-            .column(9)
+            .column(10)
             .search(statusTabPatterns[tab] || '', true, false)
             .draw();
     }

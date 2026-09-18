@@ -120,6 +120,7 @@ class MenuHelper
                 'subItems' => [
                     ['name' => 'Senarai Kumpulan', 'path' => '/mekanik-group-list', 'pro' => false],
                     ['name' => 'Tambah Kumpulan', 'path' => '/mekanik-group-add', 'pro' => false],
+                    ['name' => 'Mekanik Individu (Maintenance)', 'path' => '/mekanik-individual-list', 'pro' => false],
                 ],
             ],
             [

@@ -144,6 +144,9 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::post('/mekanik-group/{id}/member-add', [MekanikGroupController::class, 'addMember'])->name('mekanik-group-member-add');
     Route::post('/mekanik-group/{groupId}/member/{memberId}/remove', [MekanikGroupController::class, 'removeMember'])->name('mekanik-group-member-remove');
     Route::post('/mekanik-group/{groupId}/member/{memberId}/set-leader', [MekanikGroupController::class, 'setLeader'])->name('mekanik-group-member-set-leader');
+    Route::get('/mekanik-individual-list', [MekanikGroupController::class, 'listIndividual'])->name('mekanik-individual-list');
+    Route::post('/mekanik-individual-add', [MekanikGroupController::class, 'storeIndividual'])->name('mekanik-individual-add');
+    Route::post('/mekanik-individual/{id}/remove', [MekanikGroupController::class, 'removeIndividual'])->name('mekanik-individual-remove');
 
     //SIDEMENU TETEPAN - REKOD KENDERAAN
     Route::get('/rekod-car-list', [KenderaanController::class, 'carList'])->name('rekod-car-list');
@@ -299,6 +302,7 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::post('/penyelenggaraan/{id}/delete', [PenyelenggaraanController::class, 'delete'])->name('penyelenggaraan-delete');
     Route::post('/penyelenggaraan/{id}/accept', [PenyelenggaraanController::class, 'accept'])->name('penyelenggaraan-accept');
     Route::post('/penyelenggaraan/{id}/confirm', [PenyelenggaraanController::class, 'confirmPengesahan'])->name('penyelenggaraan-confirm');
+    Route::post('/penyelenggaraan/{id}/mark-done', [PenyelenggaraanController::class, 'markDone'])->name('penyelenggaraan-mark-done');
 
     //MOD UJIAN (SUPERADMIN) - TUKAR AKAUN UNTUK TESTING
     Route::post('/impersonate/start', [ImpersonateController::class, 'start'])->name('impersonate-start');

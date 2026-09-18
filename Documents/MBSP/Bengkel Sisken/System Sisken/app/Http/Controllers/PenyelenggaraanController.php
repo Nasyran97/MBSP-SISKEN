@@ -33,6 +33,12 @@ class PenyelenggaraanController extends Controller
             })
             ->leftJoin('USERS as pic', 'pic.ID', '=', 'p.USER_ID')
             ->leftJoin('KATEGORI_PENYELENGGARAAN as kp', 'kp.ID', '=', 'pv.KATEGORI_PENYELENGGARAAN_ID')
+            ->leftJoin('PENYELENGGARAAN_ASSIGNMENT as pa', function ($join) {
+                $join->on('pa.PENYELENGGARAAN_ID', '=', 'pv.ID')
+                    ->whereRaw("UPPER(pa.STATUS_DATA) = 'ACTIVE'");
+            })
+            ->leftJoin('MEKANIK_GROUP as mg', 'mg.ID', '=', 'pa.GROUP_ID')
+            ->leftJoin('USERS as mekanik', 'mekanik.ID', '=', 'pa.USER_ID')
             ->select(
                 DB::raw('pv.ID as "ID"'),
                 DB::raw('pv.NO_KERJA as "NO_KERJA"'),
@@ -44,6 +50,7 @@ class PenyelenggaraanController extends Controller
                 DB::raw('pv.KATEGORI_PENYELENGGARAAN_ID as "KATEGORI_PENYELENGGARAAN_ID"'),
                 DB::raw('kp.NAMA_KATEGORI as "KATEGORI_PENYELENGGARAAN_NAMA"'),
                 DB::raw('pv.REPAIR_REMARK as "REPAIR_REMARK"'),
+                DB::raw('pv.REMARK_DONE as "REMARK_DONE"'),
                 DB::raw('pv.LOCATION_LATITUDE as "LOCATION_LATITUDE"'),
                 DB::raw('pv.LOCATION_LONGITUDE as "LOCATION_LONGITUDE"'),
                 DB::raw('pv.LOCATION_NAME as "LOCATION_NAME"'),
@@ -52,6 +59,7 @@ class PenyelenggaraanController extends Controller
                 DB::raw('pv.CREATED_BY as "CREATED_BY"'),
                 DB::raw('pv.CREATED_AT as "CREATED_AT"'),
                 DB::raw('pv.PENGESAHAN_AT as "PENGESAHAN_AT"'),
+                DB::raw('pv.COMPLETED_AT as "COMPLETED_AT"'),
 
                 DB::raw('v.NO_PLAT as "NO_PLAT"'),
                 DB::raw('v.BUATAN as "BUATAN"'),
@@ -65,21 +73,95 @@ class PenyelenggaraanController extends Controller
                 DB::raw('jkjg.NOSTAFF as "JKJG_NOSTAFF"'),
 
                 DB::raw('pic.NAMA as "PIC"'),
-                DB::raw('pic.NOSTAFF as "PIC_NOSTAFF"')
+                DB::raw('pic.NOSTAFF as "PIC_NOSTAFF"'),
+
+                DB::raw('pa.ASSIGNMENT_TYPE as "ASSIGNMENT_TYPE"'),
+                DB::raw('mg.ID as "ASSIGNED_GROUP_ID"'),
+                DB::raw('mg.GROUP_NAME as "ASSIGNED_GROUP_NAME"'),
+                DB::raw('pa.USER_ID as "ASSIGNED_USER_ID"'),
+                DB::raw('mekanik.NAMA as "ASSIGNED_MEKANIK_NAME"'),
+                DB::raw('mekanik.NOSTAFF as "ASSIGNED_MEKANIK_NOSTAFF"'),
+                DB::raw('mekanik.JABATAN as "ASSIGNED_MEKANIK_JABATAN"')
             )
             ->whereRaw("UPPER(pv.STATUS_DATA) IN ('ACTIVE', 'DELETE')");
 
+        $currentUserId = $currentUser->ID ?? $currentUser->id ?? null;
+
+        // Groups the current user is an active member of, so mekanik can see the
+        // work orders assigned to their own group (or to them individually).
+        $mekanikGroupIds = DB::connection('oracle')
+            ->table('MEKANIK_GROUP_MEMBER')
+            ->select(DB::raw('GROUP_ID as "GROUP_ID"'))
+            ->where('USER_ID', $currentUserId)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->get()
+            ->map(fn ($m) => $m->GROUP_ID ?? $m->group_id ?? null)
+            ->filter()
+            ->values();
+
+        $leaderGroupIds = DB::connection('oracle')
+            ->table('MEKANIK_GROUP_MEMBER')
+            ->select(DB::raw('GROUP_ID as "GROUP_ID"'))
+            ->where('USER_ID', $currentUserId)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->whereRaw("UPPER(IS_LEADER) = 'Y'")
+            ->get()
+            ->map(fn ($m) => $m->GROUP_ID ?? $m->group_id ?? null)
+            ->filter()
+            ->values();
+
         if (!$isSuperAdmin && !$canAcceptPenyelenggaraan && !$canConfirmPenyelenggaraan) {
-            $penyelenggaraanQuery->where('pv.CREATED_BY', session('nostaff'));
+            $penyelenggaraanQuery->where(function ($query) use ($currentUserId, $mekanikGroupIds) {
+                $query->where('pv.CREATED_BY', session('nostaff'));
+
+                if ($mekanikGroupIds->isNotEmpty()) {
+                    $query->orWhereIn('pa.GROUP_ID', $mekanikGroupIds->toArray());
+                }
+
+                if ($currentUserId) {
+                    $query->orWhere('pa.USER_ID', $currentUserId);
+                }
+            });
         }
 
         $penyelenggaraan = $penyelenggaraanQuery
             ->orderBy('pv.ID', 'DESC')
             ->get();
 
+        $groupIds = $penyelenggaraan
+            ->map(fn ($row) => $row->ASSIGNED_GROUP_ID ?? $row->assigned_group_id ?? null)
+            ->filter()
+            ->unique()
+            ->values()
+            ->toArray();
+
+        $groupMembersMap = collect();
+
+        if (!empty($groupIds)) {
+            $groupMembersMap = DB::connection('oracle')
+                ->table('MEKANIK_GROUP_MEMBER as m')
+                ->leftJoin('USERS as u', 'u.ID', '=', 'm.USER_ID')
+                ->select(
+                    DB::raw('m.GROUP_ID as "GROUP_ID"'),
+                    DB::raw('m.IS_LEADER as "IS_LEADER"'),
+                    DB::raw('u.NAMA as "NAMA"'),
+                    DB::raw('u.NOSTAFF as "NOSTAFF"'),
+                    DB::raw('u.JABATAN as "JABATAN"')
+                )
+                ->whereIn('m.GROUP_ID', $groupIds)
+                ->whereRaw("UPPER(m.STATUS_DATA) = 'ACTIVE'")
+                ->orderByDesc(DB::raw("UPPER(m.IS_LEADER)"))
+                ->orderBy('u.NAMA')
+                ->get()
+                ->groupBy(fn ($row) => $row->GROUP_ID ?? $row->group_id ?? null);
+        }
+
         return view('pages.penyelenggaraan.penyelenggaraan-list', [
             'title' => 'Senarai Penyelenggaraan',
             'penyelenggaraan' => $penyelenggaraan,
+            'groupMembersMap' => $groupMembersMap,
+            'currentUserId' => $currentUserId,
+            'leaderGroupIds' => $leaderGroupIds->toArray(),
             'canApplyPenyelenggaraan' => $canApplyPenyelenggaraan,
             'canAcceptPenyelenggaraan' => $canAcceptPenyelenggaraan,
             'canConfirmPenyelenggaraan' => $canConfirmPenyelenggaraan,
@@ -387,6 +469,7 @@ class PenyelenggaraanController extends Controller
             ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
             ->update([
                 'STATUS' => $nextStatus,
+                'PENDING_AT' => now('Asia/Kuala_Lumpur'),
                 'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
                 'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
             ]);
@@ -394,6 +477,8 @@ class PenyelenggaraanController extends Controller
         if ($affected === 0) {
             return back()->with('error', 'Tiada rekod aktif dijumpai untuk dikemaskini.');
         }
+
+        $this->assignMekanik($id, $kategoriId);
 
         return back()->with('success', 'Permohonan penyelenggaraan berjaya diterima.');
     }
@@ -445,6 +530,110 @@ class PenyelenggaraanController extends Controller
         return back()->with('success', 'Permohonan penyelenggaraan berjaya disahkan.');
     }
 
+    public function markDone(Request $request, $id)
+    {
+        $currentUser = $this->getCurrentUser();
+        $currentUserId = $currentUser->ID ?? $currentUser->id ?? null;
+        $isSuperAdmin = $this->isSuperAdminUser($currentUser);
+
+        $penyelenggaraan = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->first();
+
+        if (!$penyelenggaraan) {
+            return back()->with('error', 'Rekod penyelenggaraan tidak dijumpai.');
+        }
+
+        $status = strtoupper(trim($penyelenggaraan->STATUS ?? $penyelenggaraan->status ?? ''));
+
+        if ($status !== 'IN PROGRESS') {
+            return back()->with('error', 'Permohonan ini bukan dalam status dalam proses.');
+        }
+
+        $assignment = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_ASSIGNMENT')
+            ->where('PENYELENGGARAAN_ID', $id)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->first();
+
+        if (!$isSuperAdmin && (!$assignment || !$this->isAssignmentLeader($assignment, $currentUserId))) {
+            abort(403, 'Hanya ketua kumpulan atau mekanik yang ditugaskan boleh menandakan selesai.');
+        }
+
+        $request->validate([
+            'remark_done' => 'required|string',
+        ], [
+            'remark_done.required' => 'Sila masukkan catatan kerja yang telah dilakukan.',
+        ]);
+
+        $now = now('Asia/Kuala_Lumpur');
+        $updatedBy = session('nostaff') ?? 'SYSTEM';
+
+        $affected = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->update([
+                'STATUS' => 'COMPLETED',
+                'REMARK_DONE' => $request->remark_done,
+                'COMPLETED_AT' => $now,
+                'UPDATED_BY' => $updatedBy,
+                'UPDATED_AT' => $now,
+            ]);
+
+        if ($affected === 0) {
+            return back()->with('error', 'Tiada rekod aktif dijumpai untuk dikemaskini.');
+        }
+
+        if ($assignment) {
+            DB::connection('oracle')
+                ->table('PENYELENGGARAAN_ASSIGNMENT')
+                ->where('ID', $assignment->ID ?? $assignment->id)
+                ->update([
+                    'STATUS' => 'COMPLETED',
+                    'COMPLETED_AT' => $now,
+                    'UPDATED_BY' => $updatedBy,
+                    'UPDATED_AT' => $now,
+                ]);
+        }
+
+        return back()->with('success', 'Permohonan penyelenggaraan berjaya ditandakan selesai.');
+    }
+
+    private function isAssignmentLeader($assignment, $currentUserId)
+    {
+        if (!$currentUserId) {
+            return false;
+        }
+
+        $assignmentType = strtoupper(trim($assignment->ASSIGNMENT_TYPE ?? $assignment->assignment_type ?? ''));
+
+        if ($assignmentType === 'INDIVIDUAL') {
+            $assignedUserId = $assignment->USER_ID ?? $assignment->user_id ?? null;
+
+            return $assignedUserId && (string) $assignedUserId === (string) $currentUserId;
+        }
+
+        if ($assignmentType === 'GROUP') {
+            $groupId = $assignment->GROUP_ID ?? $assignment->group_id ?? null;
+
+            if (!$groupId) {
+                return false;
+            }
+
+            return DB::connection('oracle')
+                ->table('MEKANIK_GROUP_MEMBER')
+                ->where('GROUP_ID', $groupId)
+                ->where('USER_ID', $currentUserId)
+                ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+                ->whereRaw("UPPER(IS_LEADER) = 'Y'")
+                ->exists();
+        }
+
+        return false;
+    }
+
     public function store(Request $request)
     {
         $currentUser = $this->getCurrentUser();
@@ -475,7 +664,7 @@ class PenyelenggaraanController extends Controller
             'repair_remark.required' => 'Sila masukkan keterangan kerosakan.',
         ]);
 
-        $noKerja = 'PNY-' . date('Ymd') . '-' . str_pad((string) random_int(1, 9999), 4, '0', STR_PAD_LEFT);
+        $noKerja = $this->generateNoKerja();
 
         $kategoriPenyelenggaraanId = $request->kategori_penyelenggaraan_id;
         $kategoriNama = $this->getKategoriPenyelenggaraanNama($kategoriPenyelenggaraanId);
@@ -624,6 +813,26 @@ class PenyelenggaraanController extends Controller
         return strtoupper(trim($nama ?? ''));
     }
 
+    // No Kerja format: K00001/2026, resetting to 00001 each new year.
+    private function generateNoKerja()
+    {
+        $year = date('Y');
+
+        $lastNoKerja = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->whereRaw("UPPER(NO_KERJA) LIKE ?", ['K%/' . $year])
+            ->orderByDesc('ID')
+            ->value('NO_KERJA');
+
+        $nextNumber = 1;
+
+        if ($lastNoKerja && preg_match('/^K(\d+)\/' . $year . '$/', trim($lastNoKerja), $matches)) {
+            $nextNumber = ((int) $matches[1]) + 1;
+        }
+
+        return 'K' . str_pad((string) $nextNumber, 5, '0', STR_PAD_LEFT) . '/' . $year;
+    }
+
     private function getCurrentUser()
 {
     $nostaff = session('nostaff');
@@ -676,5 +885,155 @@ private function canCreatePenyelenggaraan($user)
 private function isSuperAdminUser($user)
 {
     return $this->hasUserModuleRole($user, 'SUPERADMIN', 1);
+}
+
+// SERVICE/BREAKDOWN/WELDING are worked on by a MEKANIK_GROUP; MAINTENANCE goes to one mekanik.
+private const MEKANIK_GROUP_CATEGORIES = ['SERVICE', 'BREAKDOWN', 'WELDING'];
+private const MEKANIK_INDIVIDUAL_CATEGORIES = ['MAINTENANCE'];
+
+private function assignMekanik($penyelenggaraanId, $kategoriId)
+{
+    if (!$kategoriId) {
+        return;
+    }
+
+    $kategori = DB::connection('oracle')
+        ->table('KATEGORI_PENYELENGGARAAN')
+        ->where('ID', $kategoriId)
+        ->first();
+
+    if (!$kategori) {
+        return;
+    }
+
+    $mekanikCategory = strtoupper(trim($kategori->MEKANIK_CATEGORY ?? $kategori->mekanik_category ?? ''));
+    $isMekanikFlow = strtoupper(trim($kategori->IS_MEKANIK_FLOW ?? $kategori->is_mekanik_flow ?? '')) === 'Y';
+
+    if (!$mekanikCategory || !$isMekanikFlow) {
+        return;
+    }
+
+    $alreadyAssigned = DB::connection('oracle')
+        ->table('PENYELENGGARAAN_ASSIGNMENT')
+        ->where('PENYELENGGARAAN_ID', $penyelenggaraanId)
+        ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+        ->exists();
+
+    if ($alreadyAssigned) {
+        return;
+    }
+
+    if (in_array($mekanikCategory, self::MEKANIK_GROUP_CATEGORIES)) {
+        $groupIds = DB::connection('oracle')
+            ->table('MEKANIK_GROUP')
+            ->select(DB::raw('ID as "ID"'))
+            ->where('CATEGORY_CODE', $mekanikCategory)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->get()
+            ->map(fn ($g) => $g->ID ?? $g->id ?? null)
+            ->filter()
+            ->values();
+
+        $groupId = $this->pickLeastBusyGroup($groupIds);
+
+        if ($groupId) {
+            $this->createMekanikAssignment($penyelenggaraanId, $mekanikCategory, 'GROUP', $groupId, null);
+        }
+
+        return;
+    }
+
+    if (in_array($mekanikCategory, self::MEKANIK_INDIVIDUAL_CATEGORIES)) {
+        $userIds = DB::connection('oracle')
+            ->table('MEKANIK_INDIVIDUAL_POOL as pool')
+            ->select(DB::raw('pool.USER_ID as "USER_ID"'))
+            ->where('pool.CATEGORY_CODE', $mekanikCategory)
+            ->whereRaw("UPPER(pool.STATUS_DATA) = 'ACTIVE'")
+            ->whereRaw("UPPER(pool.AUTO_ASSIGN_ENABLED) = 'Y'")
+            ->get()
+            ->map(fn ($u) => $u->USER_ID ?? $u->user_id ?? null)
+            ->filter()
+            ->values();
+
+        $userId = $this->pickLeastBusyMekanik($userIds);
+
+        if ($userId) {
+            $this->createMekanikAssignment($penyelenggaraanId, $mekanikCategory, 'INDIVIDUAL', null, $userId);
+        }
+    }
+}
+
+private function pickLeastBusyGroup($groupIds)
+{
+    $groupIds = collect($groupIds)->filter()->values();
+
+    if ($groupIds->isEmpty()) {
+        return null;
+    }
+
+    $workload = DB::connection('oracle')
+        ->table('PENYELENGGARAAN_ASSIGNMENT')
+        ->select(
+            DB::raw('GROUP_ID as "GROUP_ID"'),
+            DB::raw('COUNT(*) as "OPEN_COUNT"')
+        )
+        ->whereIn('GROUP_ID', $groupIds->toArray())
+        ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+        ->whereRaw("UPPER(STATUS) NOT IN ('COMPLETED', 'CANCELLED')")
+        ->groupBy('GROUP_ID')
+        ->get()
+        ->mapWithKeys(fn ($row) => [
+            ($row->GROUP_ID ?? $row->group_id) => (int) ($row->OPEN_COUNT ?? $row->open_count ?? 0),
+        ]);
+
+    return $groupIds->sortBy(fn ($id) => $workload[$id] ?? 0)->first();
+}
+
+private function pickLeastBusyMekanik($userIds)
+{
+    $userIds = collect($userIds)->filter()->values();
+
+    if ($userIds->isEmpty()) {
+        return null;
+    }
+
+    $workload = DB::connection('oracle')
+        ->table('PENYELENGGARAAN_ASSIGNMENT')
+        ->select(
+            DB::raw('USER_ID as "USER_ID"'),
+            DB::raw('COUNT(*) as "OPEN_COUNT"')
+        )
+        ->whereIn('USER_ID', $userIds->toArray())
+        ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+        ->whereRaw("UPPER(STATUS) NOT IN ('COMPLETED', 'CANCELLED')")
+        ->groupBy('USER_ID')
+        ->get()
+        ->mapWithKeys(fn ($row) => [
+            ($row->USER_ID ?? $row->user_id) => (int) ($row->OPEN_COUNT ?? $row->open_count ?? 0),
+        ]);
+
+    return $userIds->sortBy(fn ($id) => $workload[$id] ?? 0)->first();
+}
+
+private function createMekanikAssignment($penyelenggaraanId, $mekanikCategory, $assignmentType, $groupId, $userId)
+{
+    $now = now('Asia/Kuala_Lumpur');
+    $assignedBy = session('nostaff') ?? 'SYSTEM';
+
+    DB::connection('oracle')
+        ->table('PENYELENGGARAAN_ASSIGNMENT')
+        ->insert([
+            'PENYELENGGARAAN_ID' => $penyelenggaraanId,
+            'CATEGORY_CODE' => $mekanikCategory,
+            'ASSIGNMENT_TYPE' => $assignmentType,
+            'GROUP_ID' => $groupId,
+            'USER_ID' => $userId,
+            'STATUS' => 'ASSIGNED',
+            'ASSIGNED_AT' => $now,
+            'ASSIGNED_BY' => $assignedBy,
+            'STATUS_DATA' => 'ACTIVE',
+            'CREATED_BY' => $assignedBy,
+            'CREATED_AT' => $now,
+        ]);
 }
 }
