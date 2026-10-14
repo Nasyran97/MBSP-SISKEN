@@ -9,14 +9,20 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\KenderaanController;
 use App\Http\Controllers\RoadTaxController;
 use App\Http\Controllers\InsuransController;
+use App\Http\Controllers\BengkelPanelController;
 use App\Http\Controllers\PengawasController;
+use App\Http\Controllers\PemanduController;
 use App\Http\Controllers\MekanikGroupController;
 use App\Http\Controllers\TuntutanController;
 use App\Http\Controllers\MahkamahController;
 use App\Http\Controllers\LupusController;
 use App\Http\Controllers\InsuransStatistikController;
 use App\Http\Controllers\PenyelenggaraanController;
+use App\Http\Controllers\AlatGantiController;
+use App\Http\Controllers\KalendarServiceController;
+use App\Http\Controllers\ServisHarianController;
 use App\Http\Controllers\ImpersonateController;
+use App\Http\Controllers\PublicHolidayController;
 
 
 // dashboard pages
@@ -134,6 +140,15 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::get('/pengawas/{userId}/edit', [PengawasController::class, 'edit'])->name('pengawas-edit');
     Route::put('/pengawas/{userId}/update-vehicle', [PengawasController::class, 'updateVehicle'])->name('pengawas-update-vehicle');
 
+    //PEMANDU
+    Route::get('/pemandu-list', [PemanduController::class, 'list'])->name('pemandu-list');
+    Route::get('/pemandu-add', [PemanduController::class, 'create'])->name('pemandu-add');
+    Route::post('/pemandu-store', [PemanduController::class, 'store'])->name('pemandu-store');
+    Route::post('/pemandu-delete/{userId}', [PemanduController::class, 'delete'])->name('pemandu-delete');
+    Route::post('/pemandu-activate/{userId}', [PemanduController::class, 'activate'])->name('pemandu-activate');
+    Route::get('/pemandu/{userId}/edit', [PemanduController::class, 'edit'])->name('pemandu-edit');
+    Route::put('/pemandu/{userId}/update-vehicle', [PemanduController::class, 'updateVehicle'])->name('pemandu-update-vehicle');
+
     //SIDEMENU TETAPAN - MEKANIK
     Route::get('/mekanik-group-list', [MekanikGroupController::class, 'list'])->name('mekanik-group-list');
     Route::get('/mekanik-group-add', [MekanikGroupController::class, 'create'])->name('mekanik-group-add');
@@ -201,7 +216,12 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::delete('/pembekal/{id}/delete', [KenderaanController::class, 'pembekalDelete'])->name('pembekal-delete');
 
     //SIDEMENU TETAPAN - INSURANS
-    Route::get('/insurans-panel-list', [InsuransController::class, 'panelList'])->name('insurans-panel-list');
+    Route::get('/bengkel-panel-list', [BengkelPanelController::class, 'list'])->name('bengkel-panel-list');
+    Route::get('/bengkel-panel-add', [BengkelPanelController::class, 'add'])->name('bengkel-panel-add');
+    Route::get('/bengkel-panel-next-kod', [BengkelPanelController::class, 'nextKod'])->name('bengkel-panel-next-kod');
+    Route::post('/bengkel-panel-store', [BengkelPanelController::class, 'store'])->name('bengkel-panel-store');
+    Route::delete('/bengkel-panel/{id}', [BengkelPanelController::class, 'destroy'])->name('bengkel-panel-delete');
+    Route::get('/insurans-panel-list',[InsuransController::class, 'panelList'])->name('insurans-panel-list');
     Route::patch('/insurans-panel/{id}/activate', [InsuransController::class, 'activatePanel'])->name('insurans-panel-activate');
     Route::patch('/insurans-panel/{id}/deactivate', [InsuransController::class, 'deactivatePanel'])->name('insurans-panel-deactivate');
     Route::get('/insurans-panel-add', [InsuransController::class, 'panelAdd'])->name('insurans-panel-add');
@@ -293,6 +313,24 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::get('/statistik-data-display', [InsuransStatistikController::class, 'statistikDataDisplay'])->name('statistik-data-display');
 
 
+    //ALAT GANTI
+    Route::get('/alat-ganti-list', [AlatGantiController::class, 'list'])->name('alat-ganti-list');
+    Route::post('/alat-ganti-store', [AlatGantiController::class, 'store'])->name('alat-ganti-store');
+    Route::put('/alat-ganti/{id}/update', [AlatGantiController::class, 'update'])->name('alat-ganti-update');
+    Route::delete('/alat-ganti/{id}/delete', [AlatGantiController::class, 'delete'])->name('alat-ganti-delete');
+
+    //KALENDAR SERVIS
+    Route::get('/kalendar-service', [KalendarServiceController::class, 'index'])->name('kalendar-service');
+    Route::post('/kalendar-service/generate', [KalendarServiceController::class, 'generate'])->name('kalendar-service-generate');
+
+    //SERVIS HARIAN
+    Route::get('/servis-harian', [ServisHarianController::class, 'index'])->name('servis-harian');
+    Route::get('/servis-harian-kelulusan', [ServisHarianController::class, 'kelulusan'])->name('servis-harian-kelulusan');
+    Route::get('/servis-harian/{id}',[ServisHarianController::class, 'show'])->name('servis-harian-show');
+    Route::post('/servis-harian/{id}/save', [ServisHarianController::class, 'save'])->name('servis-harian-save');
+    Route::post('/servis-harian/{id}/approve/{type}', [ServisHarianController::class, 'approve'])->name('servis-harian-approve');
+    Route::post('/servis-harian/{id}/swap', [ServisHarianController::class, 'swap'])->name('servis-harian-swap');
+
     //PENYELENGGARAAN KENDERAAN
     Route::get('/penyelenggaraan-list', [PenyelenggaraanController::class, 'list'])->name('penyelenggaraan-list');
     Route::get('/penyelenggaraan-add', [PenyelenggaraanController::class, 'create'])->name('penyelenggaraan-add');
@@ -303,6 +341,9 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::post('/penyelenggaraan/{id}/accept', [PenyelenggaraanController::class, 'accept'])->name('penyelenggaraan-accept');
     Route::post('/penyelenggaraan/{id}/confirm', [PenyelenggaraanController::class, 'confirmPengesahan'])->name('penyelenggaraan-confirm');
     Route::post('/penyelenggaraan/{id}/mark-done', [PenyelenggaraanController::class, 'markDone'])->name('penyelenggaraan-mark-done');
+
+    //SIDEMENU UMUM - KALENDAR CUTI
+    Route::get('/kalendar-cuti', [PublicHolidayController::class, 'index'])->name('kalendar-cuti');
 
     //MOD UJIAN (SUPERADMIN) - TUKAR AKAUN UNTUK TESTING
     Route::post('/impersonate/start', [ImpersonateController::class, 'start'])->name('impersonate-start');

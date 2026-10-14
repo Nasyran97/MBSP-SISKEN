@@ -193,6 +193,7 @@ class UserController extends Controller
         ]);
 
         return redirect()->route('user-list')->with('success', 'Pengguna berjaya ditambah.');
+        // return redirect()->route('user-add')->with('success', 'Pengguna berjaya ditambah.');Davebatista1_D
     }
 
     public function getStaffByDepartment(Request $request)

@@ -175,6 +175,11 @@
                                                                 'menu-dropdown-item-inactive'">
                                                             {{ $subItem['name'] }}
                                                             <span class="flex items-center gap-1 ml-auto">
+                                                                @if (!empty($subItem['badge_count']))
+                                                                    <span class="inline-flex min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1.5 text-[11px] font-semibold leading-5 text-white">
+                                                                        {{ $subItem['badge_count'] }}
+                                                                    </span>
+                                                                @endif
                                                                 @if (!empty($subItem['new']))
                                                                     <span
                                                                         :class="isActive('{{ $subItem['path'] }}') ?

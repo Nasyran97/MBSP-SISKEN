@@ -82,7 +82,7 @@
 
                             <option value="{{ $driverId }}"
                                 {{ old('driver_id') == $driverId ? 'selected' : '' }}>
-                                {{ $nama }} - {{ $nostaff }} {{ $jabatan ? '(' . $jabatan . ')' : '' }}
+                                {{ $nama }} ({{ $nostaff }}){{ $jabatan ? ' - ' . $jabatan : '' }}
                             </option>
                         @endforeach
                     </select>
@@ -119,7 +119,7 @@
                 
                             <option value="{{ $jkjgId }}"
                                 {{ old('jkjg_id') == $jkjgId ? 'selected' : '' }}>
-                                {{ $nama }} - {{ $nostaff }} {{ $jabatan ? '(' . $jabatan . ')' : '' }}
+                                {{ $nama }} ({{ $nostaff }}){{ $jabatan ? ' - ' . $jabatan : '' }}
                             </option>
                         @endforeach
                     </select>

@@ -813,24 +813,10 @@ class PenyelenggaraanController extends Controller
         return strtoupper(trim($nama ?? ''));
     }
 
-    // No Kerja format: K00001/2026, resetting to 00001 each new year.
+    // Shared with Servis Harian (SERVIS_HARIAN.NO_ARAHAN_KERJA) so numbers never collide.
     private function generateNoKerja()
     {
-        $year = date('Y');
-
-        $lastNoKerja = DB::connection('oracle')
-            ->table('PENYELENGGARAAN_VEHICLE')
-            ->whereRaw("UPPER(NO_KERJA) LIKE ?", ['K%/' . $year])
-            ->orderByDesc('ID')
-            ->value('NO_KERJA');
-
-        $nextNumber = 1;
-
-        if ($lastNoKerja && preg_match('/^K(\d+)\/' . $year . '$/', trim($lastNoKerja), $matches)) {
-            $nextNumber = ((int) $matches[1]) + 1;
-        }
-
-        return 'K' . str_pad((string) $nextNumber, 5, '0', STR_PAD_LEFT) . '/' . $year;
+        return \App\Helpers\NoKerjaHelper::next();
     }
 
     private function getCurrentUser()

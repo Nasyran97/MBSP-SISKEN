@@ -65,6 +65,19 @@ class MenuHelper
         ];
     }
 
+    public static function getUmumItems()
+    {
+        return [
+            [
+                'icon' => 'calendar',
+                'name' => 'Kalendar Cuti',
+                'subItems' => [
+                    ['name' => 'Kalendar Cuti Umum', 'path' => '/kalendar-cuti', 'pro' => false],
+                ],
+            ],
+        ];
+    }
+
     public static function getOthersItems()
     {
         return [
@@ -108,6 +121,7 @@ class MenuHelper
                 'subItems' => [
                     ['name' => 'Senarai Kenderaan', 'path' => '/rekod-car-list', 'pro' => false],
                     ['name' => 'Senarai Pengawas Kenderaan', 'path' => '/pengawas-list', 'pro' => false],
+                    ['name' => 'Senarai Pemandu', 'path' => '/pemandu-list', 'pro' => false],
                     ['name' => 'Senarai Jenis Badan', 'path' => '/jenis-badan-list', 'pro' => false],
                     ['name' => 'Senarai Kelas Kegunaan', 'path' => '/kelas-guna-list', 'pro' => false],
                     ['name' => 'Senarai Lokasi Penempatan', 'path' => '/lokasi-penempatan-list', 'pro' => false],
@@ -138,6 +152,13 @@ class MenuHelper
                     ['name' => 'Senarai Tuntutan Awam', 'path' => '/tuntutan-awam-list', 'pro' => false],
                     ['name' => 'Senarai Tuntutan Mahkamah', 'path' => '/mahkamah-tuntutan-list', 'pro' => false],
                     ['name' => 'Senarai Tuntutan Pihak Ketiga', 'path' => '/pihak-ketiga-tuntutan-list', 'pro' => false],
+                ],
+            ],
+            [
+                'icon' => 'settings',
+                'name' => 'Bengkel Panel',
+                'subItems' => [
+                    ['name' => 'Senarai Bengkel Panel', 'path' => '/bengkel-panel-list', 'pro' => false],
                 ],
             ],
         ];
@@ -225,6 +246,18 @@ class MenuHelper
 
         /*
         |--------------------------------------------------------------------------
+        | Umum
+        |--------------------------------------------------------------------------
+        | Visible to all logged-in users.
+        |--------------------------------------------------------------------------
+        */
+        $groups[] = [
+            'title' => 'Umum',
+            'items' => self::getUmumItems(),
+        ];
+
+        /*
+        |--------------------------------------------------------------------------
         | Tetapan
         |--------------------------------------------------------------------------
         | Any module with ADMIN role can view normal settings.
@@ -273,7 +306,41 @@ class MenuHelper
                     // ['name' => 'Permohonan Penyelenggaraan', 'path' => '/penyelenggaraan-add', 'pro' => false],
                 ],
             ],
+            [
+                'icon' => 'penyelenggaraan',
+                'name' => 'Alat Ganti',
+                'subItems' => [
+                    ['name' => 'Senarai Alat Ganti', 'path' => '/alat-ganti-list', 'pro' => false],
+                ],
+            ],
+            [
+                'icon' => 'calendar',
+                'name' => 'Kalendar Servis',
+                'subItems' => [
+                    ['name' => 'Kalendar Servis', 'path' => '/kalendar-service', 'pro' => false],
+                    ['name' => 'Servis Harian', 'path' => '/servis-harian', 'pro' => false],
+                    ['name' => 'Kelulusan', 'path' => '/servis-harian-kelulusan', 'pro' => false, 'badge_count' => self::getKelulusanPendingCount()],
+                ],
+            ],
         ];
+    }
+
+    // Servis harian forms still waiting for the current user's approval.
+    private static function getKelulusanPendingCount()
+    {
+        $nostaff = session('nostaff');
+
+        if (!$nostaff) {
+            return 0;
+        }
+
+        try {
+            $user = DB::connection('oracle')->table('USERS')->where('nostaff', $nostaff)->first();
+
+            return $user ? \App\Helpers\ServisKelulusan::pendingCount($user) : 0;
+        } catch (\Throwable $e) {
+            return 0;
+        }
     }
 
     private static function getCurrentUserId()
@@ -308,6 +375,13 @@ class MenuHelper
     }
 
     private static function getRoadtaxExpiringCount()
+    {
+        $key = 'menu_roadtax_badge_' . session('nostaff');
+
+        return \Illuminate\Support\Facades\Cache::remember($key, 300, fn () => self::computeRoadtaxExpiringCount());
+    }
+
+    private static function computeRoadtaxExpiringCount()
     {
         $isSuperAdmin = self::isSuperAdmin();
 
@@ -355,6 +429,8 @@ class MenuHelper
         return $query->count();
     }
 
+    private static array $rolesMemo = [];
+
     private static function getCurrentUserModuleRoles()
     {
         $nostaff = session('nostaff');
@@ -362,6 +438,16 @@ class MenuHelper
         if (!$nostaff) {
             return [];
         }
+
+        if (isset(self::$rolesMemo[$nostaff])) {
+            return self::$rolesMemo[$nostaff];
+        }
+
+        return self::$rolesMemo[$nostaff] = self::loadCurrentUserModuleRoles($nostaff);
+    }
+
+    private static function loadCurrentUserModuleRoles($nostaff)
+    {
 
         $user = DB::connection('oracle')
             ->table('USERS')
@@ -504,9 +590,16 @@ class MenuHelper
         return self::hasModuleRole('PENYELENGGARAAN', 47);
     }
 
+    // Pegawai Jurutera (PENYELENGGARAAN role 101) can open every sidemenu (except Tetapan Superadmin).
+    private static function isPegawaiJurutera()
+    {
+        return self::hasModuleRole('PENYELENGGARAAN', 101);
+    }
+
     private static function hasInsuransAccess()
     {
         return self::isSuperAdmin()
+            || self::isPegawaiJurutera()
             || self::hasModule('INSURANS');
     }
 
@@ -519,6 +612,7 @@ class MenuHelper
     private static function canAccessTetapan()
     {
         return self::isSuperAdmin()
+            || self::isPegawaiJurutera()
             || self::isInsuransAdmin()
             || self::isPenyelenggaraanAdmin();
     }
@@ -558,6 +652,30 @@ class MenuHelper
             'chat' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M4.00002 12.0957C4.00002 7.67742 7.58174 4.0957 12 4.0957C16.4183 4.0957 20 7.67742 20 12.0957C20 16.514 16.4183 20.0957 12 20.0957H5.06068L6.34317 18.8132C6.48382 18.6726 6.56284 18.4818 6.56284 18.2829C6.56284 18.084 6.48382 17.8932 6.34317 17.7526C4.89463 16.304 4.00002 14.305 4.00002 12.0957ZM12 2.5957C6.75332 2.5957 2.50002 6.849 2.50002 12.0957C2.50002 14.4488 3.35633 16.603 4.77303 18.262L2.71969 20.3154C2.50519 20.5299 2.44103 20.8525 2.55711 21.1327C2.6732 21.413 2.94668 21.5957 3.25002 21.5957H12C17.2467 21.5957 21.5 17.3424 21.5 12.0957C21.5 6.849 17.2467 2.5957 12 2.5957ZM7.62502 10.8467C6.93467 10.8467 6.37502 11.4063 6.37502 12.0967C6.37502 12.787 6.93467 13.3467 7.62502 13.3467H7.62512C8.31548 13.3467 8.87512 12.787 8.87512 12.0967C8.87512 11.4063 8.31548 10.8467 7.62512 10.8467H7.62502ZM10.75 12.0967C10.75 11.4063 11.3097 10.8467 12 10.8467H12.0001C12.6905 10.8467 13.2501 11.4063 13.2501 12.0967C13.2501 12.787 12.6905 13.3467 12.0001 13.3467H12C11.3097 13.3467 10.75 12.787 10.75 12.0967ZM16.375 10.8467C15.6847 10.8467 15.125 11.4063 15.125 12.0967C15.125 12.787 15.6847 13.3467 16.375 13.3467H16.3751C17.0655 13.3467 17.6251 12.787 17.6251 12.0967C17.6251 11.4063 17.0655 10.8467 16.3751 10.8467H16.375Z" fill="currentColor"></path></svg>',
 
             'support-ticket' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M20 17.0518V12C20 7.58174 16.4183 4 12 4C7.58168 4 3.99994 7.58174 3.99994 12V17.0518M19.9998 14.041V19.75C19.9998 20.5784 19.3282 21.25 18.4998 21.25H13.9998M6.5 18.75H5.5C4.67157 18.75 4 18.0784 4 17.25V13.75C4 12.9216 4.67157 12.25 5.5 12.25H6.5C7.32843 12.25 8 12.9216 8 13.75V17.25C8 18.0784 7.32843 18.75 6.5 18.75ZM17.4999 18.75H18.4999C19.3284 18.75 19.9999 18.0784 19.9999 17.25V13.75C19.9999 12.9216 19.3284 12.25 18.4999 12.25H17.4999C16.6715 12.25 15.9999 12.9216 15.9999 13.75V17.25C15.9999 18.0784 16.6715 18.75 17.4999 18.75Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path></svg>',
+
+            // Cog / settings
+            'settings' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10.3 3.6a1.8 1.8 0 0 1 3.4 0l.3.9a1.8 1.8 0 0 0 2.6 1l.8-.5a1.8 1.8 0 0 1 2.4 2.4l-.5.8a1.8 1.8 0 0 0 1 2.6l.9.3a1.8 1.8 0 0 1 0 3.4l-.9.3a1.8 1.8 0 0 0-1 2.6l.5.8a1.8 1.8 0 0 1-2.4 2.4l-.8-.5a1.8 1.8 0 0 0-2.6 1l-.3.9a1.8 1.8 0 0 1-3.4 0l-.3-.9a1.8 1.8 0 0 0-2.6-1l-.8.5a1.8 1.8 0 0 1-2.4-2.4l.5-.8a1.8 1.8 0 0 0-1-2.6l-.9-.3a1.8 1.8 0 0 1 0-3.4l.9-.3a1.8 1.8 0 0 0 1-2.6l-.5-.8a1.8 1.8 0 0 1 2.4-2.4l.8.5a1.8 1.8 0 0 0 2.6-1l.3-.9Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.5"/></svg>',
+
+            // Receipt / road tax
+            'roadtax' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M6 3.75h12a.75.75 0 0 1 .75.75v16.5l-2.25-1.5-2.25 1.5-2.25-1.5-2.25 1.5-2.25-1.5-2.25 1.5V4.5A.75.75 0 0 1 6 3.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M9 8.5h6M9 12h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+
+            // Shield / insurance
+            'insurans' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 3 4.5 6v5.5c0 4.4 3.1 8.1 7.5 9.5 4.4-1.4 7.5-5.1 7.5-9.5V6L12 3Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="m9 12 2.2 2.2L15.5 10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+
+            // Document with lines / liability case
+            'liabiliti' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 3.75H7.5a1.5 1.5 0 0 0-1.5 1.5v13.5a1.5 1.5 0 0 0 1.5 1.5h9a1.5 1.5 0 0 0 1.5-1.5V7.75L14 3.75Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M14 3.75v4h4M9 12h6M9 15.5h6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+
+            // Scales / court
+            'Mahkamah' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 4v16M8 20h8M5 7h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M5 7 2.5 13a2.5 2.5 0 0 0 5 0L5 7ZM19 7l-2.5 6a2.5 2.5 0 0 0 5 0L19 7Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>',
+
+            // Trash / scrapped vehicle
+            'Lupus' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4.5 7h15M9.5 7V4.75h5V7M6.5 7l.8 12a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-12M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+
+            // Bar chart / statistics
+            'Statistik' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 20h16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><rect x="5.5" y="11" width="3.5" height="7" rx=".8" stroke="currentColor" stroke-width="1.5"/><rect x="10.25" y="6" width="3.5" height="12" rx=".8" stroke="currentColor" stroke-width="1.5"/><rect x="15" y="13" width="3.5" height="5" rx=".8" stroke="currentColor" stroke-width="1.5"/></svg>',
+
+            // Wrench / maintenance
+            'penyelenggaraan' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 
             'email' => '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M3.5 8.187V17.25C3.5 17.6642 3.83579 18 4.25 18H19.75C20.1642 18 20.5 17.6642 20.5 17.25V8.18747L13.2873 13.2171C12.5141 13.7563 11.4866 13.7563 10.7134 13.2171L3.5 8.187ZM20.5 6.2286C20.5 6.23039 20.5 6.23218 20.5 6.23398V6.24336C20.4976 6.31753 20.4604 6.38643 20.3992 6.42905L12.4293 11.9867C12.1716 12.1664 11.8291 12.1664 11.5713 11.9867L3.60116 6.42885C3.538 6.38481 3.50035 6.31268 3.50032 6.23568C3.50028 6.10553 3.60577 6 3.73592 6H20.2644C20.3922 6 20.4963 6.10171 20.5 6.2286ZM22 6.25648V17.25C22 18.4926 20.9926 19.5 19.75 19.5H4.25C3.00736 19.5 2 18.4926 2 17.25V6.23398C2 6.22371 2.00021 6.2135 2.00061 6.20333C2.01781 5.25971 2.78812 4.5 3.73592 4.5H20.2644C21.2229 4.5 22 5.27697 22.0001 6.23549C22.0001 6.24249 22.0001 6.24949 22 6.25648Z" fill="currentColor"></path></svg>',
         ];

@@ -3,6 +3,7 @@
     $__isImpersonating = (bool) $__impersonateOriginal;
     $__realNostaff = $__impersonateOriginal['nostaff'] ?? session('nostaff');
     $__canImpersonate = false;
+    $__impersonateGroups = [];
 
     if ($__realNostaff) {
         $__realUser = \Illuminate\Support\Facades\DB::connection('oracle')
@@ -25,6 +26,61 @@
                 }
             }
         }
+    }
+
+    if ($__canImpersonate && !$__isImpersonating) {
+        $__roleNames = \Illuminate\Support\Facades\DB::connection('oracle')
+            ->table('roles')
+            ->select('id', 'name')
+            ->get()
+            ->mapWithKeys(function ($r) {
+                $r = array_change_key_case((array) $r, CASE_LOWER);
+
+                return [(int) $r['id'] => trim($r['name'] ?? '')];
+            })
+            ->all();
+
+        // Group users by "MODULE - Role"; a user with several module roles is listed under each.
+        $__groups = [];
+
+        $__users = \Illuminate\Support\Facades\DB::connection('oracle')
+            ->table('users')
+            ->select('nostaff', 'nama', 'module_role')
+            ->whereRaw("UPPER(status_data) = 'ACTIVE'")
+            ->where('nostaff', '<>', $__realNostaff)
+            ->orderBy('nama')
+            ->get();
+
+        foreach ($__users as $__u) {
+            $__u = array_change_key_case((array) $__u, CASE_LOWER);
+            $__roles = json_decode($__u['module_role'] ?? '[]', true);
+            $__labels = [];
+
+            foreach (is_array($__roles) ? $__roles : [] as $__r) {
+                $__m = strtoupper(trim($__r['module'] ?? ''));
+                $__rid = (int) ($__r['role'] ?? 0);
+
+                if ($__m === '') {
+                    continue;
+                }
+
+                $__labels[$__m . ' - ' . ($__roleNames[$__rid] ?? ('Role ' . $__rid))] = true;
+            }
+
+            foreach (array_keys($__labels) ?: ['Tiada Peranan'] as $__label) {
+                $__groups[$__label][] = ['nostaff' => $__u['nostaff'], 'nama' => $__u['nama']];
+            }
+        }
+
+        ksort($__groups);
+
+        if (isset($__groups['Tiada Peranan'])) {
+            $__none = $__groups['Tiada Peranan'];
+            unset($__groups['Tiada Peranan']);
+            $__groups['Tiada Peranan'] = $__none;
+        }
+
+        $__impersonateGroups = $__groups;
     }
 @endphp
 
@@ -63,8 +119,17 @@
             @else
                 <form method="POST" action="{{ route('impersonate-start') }}">
                     @csrf
-                    <label for="impersonate-nostaff">No Staf untuk diuji</label>
-                    <input type="text" id="impersonate-nostaff" name="nostaff" placeholder="Contoh: 12345" required autocomplete="off">
+                    <label for="impersonate-nostaff">Pilih pengguna untuk diuji</label>
+                    <select id="impersonate-nostaff" name="nostaff" required>
+                        <option value="">-- Pilih Pengguna --</option>
+                        @foreach($__impersonateGroups as $__label => $__groupUsers)
+                            <optgroup label="{{ $__label }}">
+                                @foreach($__groupUsers as $__u)
+                                    <option value="{{ $__u['nostaff'] }}">{{ $__u['nama'] }} ({{ $__u['nostaff'] }})</option>
+                                @endforeach
+                            </optgroup>
+                        @endforeach
+                    </select>
                     <button type="submit" class="impersonate-btn impersonate-btn-primary">Tukar Akaun</button>
                 </form>
             @endif
@@ -163,7 +228,8 @@
             margin-bottom: 6px;
         }
 
-        #impersonate-panel input[type="text"] {
+        #impersonate-panel input[type="text"],
+        #impersonate-panel select {
             width: 100%;
             padding: 8px 10px;
             border: 1px solid #d0d5dd;
