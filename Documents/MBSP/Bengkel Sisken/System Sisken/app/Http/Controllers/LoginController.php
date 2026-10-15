@@ -123,7 +123,25 @@ class LoginController extends Controller
 
         $request->session()->save();
 
-        $redirectUrl = $request->input('redirectUrl', route('cukai-jalan-info-list'));
+        $modules = [];
+        $moduleRole = json_decode($user->MODULE_ROLE ?? $user->module_role ?? '[]', true);
+        if (is_array($moduleRole)) {
+            foreach ($moduleRole as $item) {
+                $modules[] = strtoupper(trim($item['module'] ?? ''));
+            }
+        }
+
+        if (in_array('SUPERADMIN', $modules)) {
+            $defaultRoute = 'user-list';
+        } elseif (in_array('INSURANS', $modules)) {
+            $defaultRoute = 'cukai-jalan-info-list';
+        } elseif (in_array('PENYELENGGARAAN', $modules)) {
+            $defaultRoute = 'penyelenggaraan-list';
+        } else {
+            $defaultRoute = 'cukai-jalan-info-list';
+        }
+
+        $redirectUrl = $request->input('redirectUrl') ?: route($defaultRoute);
 
         return redirect($redirectUrl)->with('success', 'Login berjaya.');
 

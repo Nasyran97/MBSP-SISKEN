@@ -79,12 +79,12 @@ class UserController extends Controller
 
         try {
             $response = Http::withBasicAuth(
-                    env('MBSP_DEPT_API_USERNAME'),
-                    env('MBSP_DEPT_API_PASSWORD')
+                    config('services.mbsp.username'),
+                    config('services.mbsp.password')
                 )
                 ->asForm()
-                ->post(env('MBSP_DEPT_API_URL'), [
-                    env('MBSP_DEPT_API_KEY') => env('MBSP_DEPT_API_VALUE'),
+                ->post(config('services.mbsp.dept_url'), [
+                    config('services.mbsp.dept_key') => config('services.mbsp.dept_value'),
                 ]);
 
             $data = $response->json();
@@ -207,12 +207,12 @@ class UserController extends Controller
 
         try {
             $response = Http::withBasicAuth(
-                    env('MBSP_DEPT_API_USERNAME'),
-                    env('MBSP_DEPT_API_PASSWORD')
+                    config('services.mbsp.username'),
+                    config('services.mbsp.password')
                 )
                 ->asForm()
-                ->post(env('MBSP_STAFF_API_URL'), [
-                    env('MBSP_STAFF_API_KEY') => env('MBSP_STAFF_API_VALUE'),
+                ->post(config('services.mbsp.staff_url'), [
+                    config('services.mbsp.staff_key') => config('services.mbsp.staff_value'),
                     'kodjabatanstaff' => $departmentCode,
                 ]);
 

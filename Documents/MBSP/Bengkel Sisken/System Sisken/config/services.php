@@ -35,4 +35,15 @@ return [
         ],
     ],
 
+    'mbsp' => [
+        'username'       => env('MBSP_DEPT_API_USERNAME', 'enforce'),
+        'password'       => env('MBSP_DEPT_API_PASSWORD', 'enforce@mbsp123'),
+        'dept_url'       => env('MBSP_DEPT_API_URL', 'https://apimbsp.mbsp.gov.my/public/APIS_6874be6b13258/data/department'),
+        'dept_key'       => env('MBSP_DEPT_API_KEY', '6874be6b13269'),
+        'dept_value'     => env('MBSP_DEPT_API_VALUE', 'XHWBIEWPB0UKNLO505Q2B171'),
+        'staff_url'      => env('MBSP_STAFF_API_URL', 'https://apimbsp.mbsp.gov.my/public/APIS_633bb3e5a094b/staff/bydepartment'),
+        'staff_key'      => env('MBSP_STAFF_API_KEY', '633bb3e5a0993'),
+        'staff_value'    => env('MBSP_STAFF_API_VALUE', 'LBTXN72WW3JCS13W1WIUE485'),
+    ],
+
 ];
