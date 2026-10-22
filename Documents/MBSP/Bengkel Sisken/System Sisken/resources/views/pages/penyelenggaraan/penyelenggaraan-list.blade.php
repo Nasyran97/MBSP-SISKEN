@@ -20,10 +20,30 @@
     </div>
 
     <x-common.component-card title="Senarai Penyelenggaraan">
+        @php
+            $tabCounts = ['PENDING' => 0, 'PENGESAHAN' => 0, 'PROGRESS' => 0];
+
+            foreach ($penyelenggaraan as $countRow) {
+                if (strtoupper(trim($countRow->STATUS_DATA ?? $countRow->status_data ?? 'ACTIVE')) === 'DELETE') {
+                    continue;
+                }
+
+                $countStatus = strtoupper(trim($countRow->STATUS ?? $countRow->status ?? 'PENDING'));
+
+                if ($countStatus === 'PENDING') {
+                    $tabCounts['PENDING']++;
+                } elseif (in_array($countStatus, ['PENGESAHAN', 'PENGESAHAN JURUTERA'], true)) {
+                    $tabCounts['PENGESAHAN']++;
+                } elseif (in_array($countStatus, ['IN PROGRESS', 'IN_PROGRESS', 'DALAM PROSES'])) {
+                    $tabCounts['PROGRESS']++;
+                }
+            }
+        @endphp
+
         <div class="penyelenggaraan-tabs">
-            <button type="button" class="tab-btn active" data-status-tab="PENDING">Pending</button>
-            <button type="button" class="tab-btn" data-status-tab="PENGESAHAN">Pengesahan</button>
-            <button type="button" class="tab-btn" data-status-tab="PROGRESS">Dalam Proses</button>
+            <button type="button" class="tab-btn active" data-status-tab="PENDING">Pending @if($tabCounts['PENDING'] > 0)<span class="tab-count">{{ $tabCounts['PENDING'] }}</span>@endif</button>
+            <button type="button" class="tab-btn" data-status-tab="PENGESAHAN">Pengesahan @if($tabCounts['PENGESAHAN'] > 0)<span class="tab-count">{{ $tabCounts['PENGESAHAN'] }}</span>@endif</button>
+            <button type="button" class="tab-btn" data-status-tab="PROGRESS">Dalam Proses @if($tabCounts['PROGRESS'] > 0)<span class="tab-count">{{ $tabCounts['PROGRESS'] }}</span>@endif</button>
             <button type="button" class="tab-btn" data-status-tab="COMPLETED">Selesai</button>
             <button type="button" class="tab-btn" data-status-tab="CANCELLED">Batal</button>
         </div>
@@ -35,7 +55,7 @@
                         <th>Bil</th>
                         <th>No Plat</th>
                         <th>PIC</th>
-                        <th>No Kerja</th>
+                        <th>No Arahan Kerja</th>
                         <th>Model Kenderaan</th>
                         <th>Jenis Kenderaan</th>
                         <th>Odometer</th>
@@ -56,7 +76,7 @@
                             $picNoStaff = $row->PIC_NOSTAFF ?? $row->pic_nostaff ?? null;
 
                             $noPlat = $row->NO_PLAT ?? $row->no_plat ?? '-';
-                            $noKerja = $row->NO_KERJA ?? $row->no_kerja ?? '-';
+                            $noArahanKerja = $row->NO_ARAHAN_KERJA ?? $row->no_arahan_kerja ?? '-';
 
                             $buatan = $row->BUATAN ?? $row->buatan ?? '';
                             $model = $row->MODEL ?? $row->model ?? '-';
@@ -91,20 +111,32 @@
 
                             $statusClass = match($status) {
                                 'PENDING' => 'status-pending',
-                                'PENGESAHAN' => 'status-pengesahan',
+                                'PENGESAHAN', 'PENGESAHAN JURUTERA' => 'status-pengesahan',
                                 'IN PROGRESS', 'IN_PROGRESS', 'DALAM PROSES' => 'status-progress',
                                 'COMPLETED', 'COMPLETE', 'SELESAI' => 'status-completed',
                                 'CANCELLED', 'CANCELED', 'BATAL' => 'status-cancelled',
                                 default => 'status-default',
                             };
 
+                            // Job Controller -> PJ -> Pegawai Jurutera flow (Kimpalan, Aircond, Pembaikan Berat/Ringan, Servis).
+                            $kategoriNorm = strtoupper(trim(str_replace('_', ' ', $kategori)));
+                            $isFlow = in_array($kategoriNorm, $flowKategori ?? [], true);
+                            $isJcForRow = $isFlow && in_array($kategoriNorm, $jcKategori ?? [], true);
+                            $repairMode = strtoupper(trim($row->REPAIR_MODE ?? $row->repair_mode ?? ''));
+                            $noArahanKerja = $row->NO_ARAHAN_KERJA ?? $row->no_arahan_kerja ?? null;
+                            // Pegawai PUSKEB accepts first; the Job Controller then assesses in Pengesahan.
+                            $canJcRow = !$isDeletedRow && $isJcForRow
+                                && $status === 'PENGESAHAN' && $repairMode === '';
+                            $canPjRow = !$isDeletedRow && $status === 'PENGESAHAN' && $repairMode !== '' && $isFlow && ($canApprovePj ?? false);
+                            $canJuteraRow = !$isDeletedRow && $status === 'PENGESAHAN JURUTERA' && $isFlow && ($canApproveJurutera ?? false);
+
                             $createdBy = $row->CREATED_BY ?? $row->created_by ?? null;
                             $isOwnRow = $createdBy && $createdBy === session('nostaff');
                             $canManageRow = !$isDeletedRow
                                 && ($isSuperAdmin || $isOwnRow);
                             $canEditRow = $canManageRow && $status === 'PENDING';
-                            $canDeleteRow = $canManageRow && !in_array($status, ['COMPLETED', 'COMPLETE', 'SELESAI']);
-                            $canConfirmRow = !$isDeletedRow && $status === 'PENGESAHAN' && $canConfirmPenyelenggaraan;
+                            $canDeleteRow = $canManageRow && !in_array($status, ['COMPLETED', 'COMPLETE', 'SELESAI', 'CANCELLED', 'CANCELED']);
+                            $canConfirmRow = !$isDeletedRow && $status === 'PENGESAHAN' && $canConfirmPenyelenggaraan && !$isFlow;
 
                             $isLeaderOfAssignedGroup = $assignmentType === 'GROUP'
                                 && $assignedGroupId
@@ -116,7 +148,8 @@
 
                             $canMarkDoneRow = !$isDeletedRow
                                 && $status === 'IN PROGRESS'
-                                && ($isSuperAdmin || $isLeaderOfAssignedGroup || $isAssignedIndividualSelf);
+                                && ($isSuperAdmin || $isLeaderOfAssignedGroup || $isAssignedIndividualSelf
+                                    || ($isJcForRow && ($repairMode === 'BENGKEL_PANEL' || $assignmentType === '')));
                         @endphp
 
                         <tr>
@@ -139,7 +172,7 @@
                             </td>
 
                             <td class="font-semibold">
-                                {{ $noKerja }}
+                                {{ $noArahanKerja }}
                             </td>
 
                             <td class="cell-text">
@@ -176,10 +209,64 @@
                                 {{ \Illuminate\Support\Str::limit($remark, 80) }}
                             </td>
 
+                            @php
+                                // Which approval a flow job is waiting for: 0 = Job Controller, 1 = Penolong Jurutera, 2 = Pegawai Jurutera.
+                                $approvalStep = null;
+                                $statusLabel = $status;
+
+                                if ($isFlow && !$isDeletedRow) {
+                                    if ($status === 'PENGESAHAN') {
+                                        $approvalStep = $repairMode === '' ? 0 : 1;
+                                    } elseif ($status === 'PENGESAHAN JURUTERA') {
+                                        $approvalStep = 2;
+                                    }
+
+                                    if (str_starts_with($status, 'PENGESAHAN')) {
+                                        $statusLabel = 'PENGESAHAN (' . ['JC', 'PENOLONG JURUTERA', 'PEGAWAI JURUTERA'][$approvalStep] . ')';
+                                    }
+                                }
+
+                                // What the earlier approvers did, shown in the approve / deny dialog.
+                                $fmtApproval = function ($date) {
+                                    try {
+                                        return $date ? \Carbon\Carbon::parse($date)->format('d/m/Y H:i') : '';
+                                    } catch (\Throwable $e) {
+                                        return '';
+                                    }
+                                };
+
+                                $decisionInfo = [
+                                    'kategori' => str_replace('_', ' ', $kategori),
+                                    'masalah' => $remark,
+                                    'mode' => $repairMode === 'INTERNAL' ? 'Pembaikan Dalaman' : ($repairMode === 'BENGKEL_PANEL' ? 'Bengkel Panel' : ''),
+                                    'panel' => $row->BENGKEL_PANEL_NAMA ?? $row->bengkel_panel_nama ?? '',
+                                    'jcRemark' => $row->JC_REMARK ?? $row->jc_remark ?? '',
+                                    'jcBy' => $row->JC_NAMA ?? $row->jc_nama ?? ($row->JC_BY ?? $row->jc_by ?? ''),
+                                    'jcAt' => $fmtApproval($row->JC_AT ?? $row->jc_at ?? null),
+                                    'pjBy' => $row->PJ_NAMA ?? $row->pj_nama ?? '',
+                                    'pjAt' => $fmtApproval($row->PJ_AT ?? $row->pj_at ?? null),
+                                ];
+
+                                $approvalSteps = ['JC', 'PJ', 'PEG. JURUTERA'];
+                                $approvalStepTitles = ['Job Controller', 'Penolong Jurutera', 'Pegawai Jurutera'];
+                            @endphp
+
                             <td class="text-center">
-                                <span class="status-badge {{ $statusClass }}">
-                                    {{ $status }}
+                                <span class="status-badge status-badge-wrap {{ $statusClass }}">
+                                    {{ $statusLabel }}
                                 </span>
+
+                                @if($approvalStep !== null)
+                                    <div class="stage-tracker" title="Menunggu: {{ $approvalStepTitles[$approvalStep] }}">
+                                        @foreach($approvalSteps as $stepIndex => $stepName)
+                                            <span class="stage-step {{ $stepIndex < $approvalStep ? 'done' : ($stepIndex === $approvalStep ? 'current' : '') }}"
+                                                  title="{{ $approvalStepTitles[$stepIndex] }}">
+                                                {{ $stepIndex < $approvalStep ? '✓' : '' }} {{ $stepName }}
+                                            </span>
+                                        @endforeach
+                                    </div>
+                                    <div class="stage-left">Baki: {{ 3 - $approvalStep }}</div>
+                                @endif
                             </td>
 
                             <td class="text-center">
@@ -197,7 +284,30 @@
                                         </svg>
                                     </button>
 
-                                    @if($canAcceptPenyelenggaraan && $status === 'PENDING')
+                                    @if($canJcRow)
+                                        <button type="button"
+                                                class="action-btn jc-btn"
+                                                title="Nilai Masalah"
+                                                onclick="openJcModal({{ $id }}, @js($noPlat), @js($noArahanKerja), @js($kategori), @js($remark))">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2M9 5h6M9 12h6M9 16h4"
+                                                      stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                            </svg>
+                                        </button>
+                                    @endif
+
+                                    @if($canPjRow || $canJuteraRow)
+                                        <button type="button"
+                                                class="action-btn sahkan-btn"
+                                                title="{{ $canPjRow ? 'Lulus / Tolak (Penolong Jurutera)' : 'Lulus / Tolak Arahan Kerja (Pegawai Jurutera)' }}"
+                                                onclick="decidePenyelenggaraan({{ $id }}, '{{ $canPjRow ? 'pj' : 'jurutera' }}', @js($noPlat), @js($noArahanKerja), @js($decisionInfo))">
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                                <path d="M5 12L10 17L19 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                                            </svg>
+                                        </button>
+                                    @endif
+
+                                    @if($canAcceptPenyelenggaraan && $status === 'PENDING' && !$isDeletedRow)
                                         <form method="POST" action="{{ route('penyelenggaraan-accept', $id) }}">
                                             @csrf
                                             <button type="submit"
@@ -237,11 +347,13 @@
                                         <form id="mark-done-form-{{ $id }}" method="POST" action="{{ route('penyelenggaraan-mark-done', $id) }}">
                                             @csrf
                                             <input type="hidden" name="remark_done" id="mark-done-remark-{{ $id }}">
+                                            <input type="hidden" name="breakdown_result" id="mark-done-result-{{ $id }}">
+                                            <input type="hidden" name="towing" id="mark-done-towing-{{ $id }}">
                                         </form>
                                         <button type="button"
                                                 class="action-btn selesai-btn"
                                                 title="Tandakan Selesai"
-                                                onclick="markPenyelenggaraanDone({{ $id }})">
+                                                onclick="markPenyelenggaraanDone({{ $id }}, {{ strtoupper(trim($kategori)) === 'BREAKDOWN' ? 'true' : 'false' }})">
                                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                                                 <path d="M5 12L10 17L19 8"
                                                       stroke="currentColor"
@@ -304,7 +416,7 @@
             $driverPhoneNum = $row->DRIVER_PHONE_NUM ?? $row->driver_phone_num ?? '-';
 
             $noPlat = $row->NO_PLAT ?? $row->no_plat ?? '-';
-            $noKerja = $row->NO_KERJA ?? $row->no_kerja ?? '-';
+            $noArahanKerja = $row->NO_ARAHAN_KERJA ?? $row->no_arahan_kerja ?? '-';
 
             $lokasiPenempatan = $row->LOKASI_PENEMPATAN ?? $row->lokasi_penempatan ?? '-';
             $buatan = $row->BUATAN ?? $row->buatan ?? '';
@@ -389,7 +501,7 @@
                             Maklumat Penyelenggaraan
                         </h3>
                         <p class="text-sm text-gray-500">
-                            {{ $noPlat }} / {{ $noKerja }}
+                            {{ $noPlat }} / {{ $noArahanKerja }}
                         </p>
                     </div>
 
@@ -400,7 +512,26 @@
                     </button>
                 </div>
 
+                @php
+                    $dRepairMode = strtoupper(trim($row->REPAIR_MODE ?? $row->repair_mode ?? ''));
+                    $dPanel = $row->BENGKEL_PANEL_NAMA ?? $row->bengkel_panel_nama ?? null;
+                    $dJcRemark = $row->JC_REMARK ?? $row->jc_remark ?? null;
+                    $dArahan = $row->NO_ARAHAN_KERJA ?? $row->no_arahan_kerja ?? null;
+                    $dRejectRemark = $row->REMARK_REJECT ?? $row->remark_reject ?? null;
+                    $dRejectStage = strtoupper(trim($row->REJECTED_STAGE ?? $row->rejected_stage ?? ''));
+                    $breakdownResult = strtoupper(trim($row->BREAKDOWN_RESULT ?? $row->breakdown_result ?? ''));
+                    $towingValue = strtoupper(trim($row->TOWING ?? $row->towing ?? ''));
+                    $breakdownResultLabel = [
+                        'PEMBAIKAN_TERUS' => 'Pembaikan Terus',
+                        'PUSKEB' => 'PUSKEB',
+                        'BENGKEL_PANEL' => 'Bengkel Panel',
+                    ][$breakdownResult] ?? null;
+                @endphp
+
                 <div class="detail-grid">
+                    {{-- MAKLUMAT KENDERAAN --}}
+                    <h4 class="detail-section">Maklumat Kenderaan</h4>
+
                     <div>
                         <span>No Plat</span>
                         <strong>{{ $noPlat }}</strong>
@@ -422,6 +553,54 @@
                     </div>
 
                     <div>
+                        <span>Odometer</span>
+                        <strong>{{ $odometer !== null ? number_format((float) $odometer, 0) . ' KM' : '-' }}</strong>
+                    </div>
+
+                    {{-- MAKLUMAT KERJA --}}
+                    <h4 class="detail-section">Maklumat Kerja</h4>
+
+                    <div>
+                        <span>No Arahan Kerja</span>
+                        <strong>{{ $dArahan ?: '-' }}</strong>
+                    </div>
+
+
+                    <div>
+                        <span>Kategori</span>
+                        <strong>{{ str_replace('_', ' ', $kategori) }}</strong>
+                    </div>
+
+                    <div>
+                        <span>Status</span>
+                        <strong>{{ $status }}</strong>
+                    </div>
+
+                    @if($dRepairMode)
+                        <div>
+                            <span>Jenis Pembaikan</span>
+                            <strong>{{ $dRepairMode === 'INTERNAL' ? 'Pembaikan Dalaman' : 'Bengkel Panel' . ($dPanel ? ' - ' . $dPanel : '') }}</strong>
+                        </div>
+                    @endif
+
+                    @if($breakdownResultLabel)
+                        <div>
+                            <span>Keputusan Breakdown</span>
+                            <strong>{{ $breakdownResultLabel }}</strong>
+                        </div>
+                    @endif
+
+                    @if($towingValue !== '')
+                        <div>
+                            <span>Towing</span>
+                            <strong>{{ $towingValue === 'Y' ? 'Ya' : 'Tidak' }}</strong>
+                        </div>
+                    @endif
+
+                    {{-- PIHAK TERLIBAT (SIAPA) --}}
+                    <h4 class="detail-section">Pihak Terlibat</h4>
+
+                    <div>
                         <span>Nama Pemandu</span>
                         <strong>{{ $driverNoStaff }} - {{ $driverName }}</strong>
                     </div>
@@ -429,11 +608,6 @@
                     <div>
                         <span>No Telefon Pemandu</span>
                         <strong>{{ $driverPhoneNum ?: '-' }}</strong>
-                    </div>
-
-                    <div>
-                        <span>No Kerja</span>
-                        <strong>{{ $noKerja }}</strong>
                     </div>
 
                     <div>
@@ -447,24 +621,12 @@
                     </div>
 
                     <div>
-                        <span>Odometer</span>
-                        <strong>{{ $odometer !== null ? number_format((float) $odometer, 0) . ' KM' : '-' }}</strong>
-                    </div>
-
-                    <div>
-                        <span>Kategori</span>
-                        <strong>{{ str_replace('_', ' ', $kategori) }}</strong>
-                    </div>
-
-                    <div>
                         <span>Mekanik/Kumpulan Ditugaskan</span>
                         <strong>{{ $assignedDisplay }}</strong>
                     </div>
 
-                    <div>
-                        <span>Status</span>
-                        <strong>{{ $status }}</strong>
-                    </div>
+                    {{-- TARIKH --}}
+                    <h4 class="detail-section">Tarikh</h4>
 
                     <div>
                         <span>Tarikh Daftar</span>
@@ -480,6 +642,9 @@
                         <span>Tarikh Selesai</span>
                         <strong>{{ $completedAt ? $formatDate($completedAt) : '-' }}</strong>
                     </div>
+
+                    {{-- LOKASI --}}
+                    <h4 class="detail-section">Lokasi Breakdown</h4>
 
                     <div>
                         <span>Koordinat Lokasi</span>
@@ -505,10 +670,27 @@
                         </div>
                     @endif
 
+                    {{-- CATATAN --}}
+                    <h4 class="detail-section">Catatan</h4>
+
                     <div class="detail-full">
                         <span>Catatan / Remark</span>
                         <strong>{{ $remark }}</strong>
                     </div>
+
+                    @if($dJcRemark)
+                        <div class="detail-full">
+                            <span>Penilaian Job Controller</span>
+                            <strong>{{ $dJcRemark }}</strong>
+                        </div>
+                    @endif
+
+                    @if($dRejectRemark)
+                        <div class="detail-full">
+                            <span>Sebab Ditolak ({{ $dRejectStage === 'JURUTERA' ? 'Pegawai Jurutera' : 'Penolong Jurutera' }})</span>
+                            <strong>{{ $dRejectRemark }}</strong>
+                        </div>
+                    @endif
 
                     @if($remarkDone)
                         <div class="detail-full">
@@ -534,7 +716,7 @@
                             @endif
                         </h3>
                         <p class="text-sm text-gray-500">
-                            {{ $noPlat }} / {{ $noKerja }}
+                            {{ $noPlat }} / {{ $noArahanKerja }}
                         </p>
                     </div>
 
@@ -600,6 +782,92 @@
     @endforeach
 </div>
 
+{{-- Shared approve / deny form (Penolong Jurutera & Pegawai Jurutera) --}}
+<form id="decision-form" method="POST" class="hidden">
+    @csrf
+    <input type="hidden" name="decision" id="decision-value">
+    <input type="hidden" name="remark_reject" id="decision-remark">
+</form>
+
+@if(!empty($jcKategori))
+    <div id="jc-modal" class="jc-modal hidden">
+        <div class="jc-overlay" onclick="closeJcModal()"></div>
+
+        <div class="jc-card">
+            <div class="jc-header">
+                <div>
+                    <h3>Penilaian Job Controller</h3>
+                    <p id="jc-job-info"></p>
+                </div>
+                <button type="button" class="jc-close" onclick="closeJcModal()">&times;</button>
+            </div>
+
+            <form id="jc-form" method="POST">
+                @csrf
+
+                <div class="jc-problem">
+                    <span>Masalah dilaporkan</span>
+                    <strong id="jc-problem"></strong>
+                </div>
+
+                <div class="jc-field">
+                    <label for="jc-remark">Penilaian masalah <em>*</em></label>
+                    <textarea id="jc-remark" name="jc_remark" rows="3" placeholder="Nyatakan penilaian anda terhadap masalah kenderaan..."></textarea>
+                </div>
+
+                <div class="jc-field">
+                    <label>Jenis pembaikan <em>*</em></label>
+                    <div class="jc-options">
+                        <label class="jc-option">
+                            <input type="radio" name="repair_mode" value="INTERNAL">
+                            <span class="jc-option-card">
+                                <span class="jc-option-title">Pembaikan Dalaman</span>
+                                <span class="jc-option-desc">Dibaiki oleh mekanik MBSP</span>
+                            </span>
+                        </label>
+                        <label class="jc-option">
+                            <input type="radio" name="repair_mode" value="BENGKEL_PANEL">
+                            <span class="jc-option-card">
+                                <span class="jc-option-title">Bengkel Panel</span>
+                                <span class="jc-option-desc">Dihantar ke bengkel panel</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="jc-field" id="jc-panel-field" style="display:none">
+                    <label for="jc-panel-search">Bengkel panel <em>*</em></label>
+                    <div class="jc-combo">
+                        <input type="text" id="jc-panel-search" placeholder="Cari nama / kod bengkel panel..." autocomplete="off">
+                        <input type="hidden" name="bengkel_panel_id" id="jc-panel-id">
+                        <div class="jc-combo-list hidden" id="jc-panel-list"></div>
+                    </div>
+                </div>
+
+                <div class="jc-alat">
+                    <button type="button" class="jc-alat-btn" id="jc-alat-toggle">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                            <path d="M12 17V11M12 7H12.01M21 12A9 9 0 1 1 3 12A9 9 0 0 1 21 12Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
+                        Info Alat Ganti
+                    </button>
+
+                    <div class="jc-alat-panel hidden" id="jc-alat-panel">
+                        <input type="text" id="jc-alat-search" placeholder="Cari alat ganti..." autocomplete="off">
+                        <div class="jc-alat-results" id="jc-alat-results"></div>
+                    </div>
+                </div>
+
+                <div id="jc-error" class="jc-error hidden"></div>
+
+                <div class="jc-footer">
+                    <button type="submit" class="jc-btn-submit">Hantar kepada Penolong Jurutera</button>
+                </div>
+            </form>
+        </div>
+    </div>
+@endif
+
 <style>
     .penyelenggaraan-tabs {
         display: flex;
@@ -623,6 +891,23 @@
         border-radius: 9px;
         cursor: pointer;
         transition: all .15s ease;
+    }
+
+    .penyelenggaraan-tabs .tab-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        margin-left: 6px;
+        border-radius: 999px;
+        background: #d92d20;
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        vertical-align: middle;
     }
 
     .penyelenggaraan-tabs .tab-btn:hover {
@@ -752,7 +1037,7 @@
 
     .penyelenggaraan-table th:nth-child(11),
     .penyelenggaraan-table td:nth-child(11) {
-        width: 120px !important;
+        width: 170px !important;
         text-align: center;
     }
 
@@ -968,6 +1253,22 @@
         grid-column: span 2 / span 2;
     }
 
+    .detail-section {
+        grid-column: span 2 / span 2;
+        margin: 8px 0 -4px;
+        padding-bottom: 6px;
+        border-bottom: 1px solid #e4e7ec;
+        color: #344054;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .detail-section:first-child {
+        margin-top: 0;
+    }
+
     .mekanik-link {
         background: none;
         border: none;
@@ -1069,6 +1370,138 @@
     .swal2-popup {
         z-index: 10000000 !important;
     }
+
+    /* Breakdown "Tandakan Selesai" dialog */
+    .bd-swal-popup { border-radius: 16px; padding: 24px 24px 20px; }
+    .bd-swal-popup .swal2-title { font-size: 20px; font-weight: 700; color: #101828; padding: 0; }
+    .bd-modal { text-align: left; }
+    .bd-subtitle { margin: 4px 0 16px; font-size: 13px; color: #667085; text-align: center; }
+    .bd-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+    .bd-option { margin: 0; cursor: pointer; }
+    .bd-option input, .bd-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+    .bd-option-card {
+        display: flex; flex-direction: column; align-items: center; gap: 4px;
+        padding: 14px 8px; height: 100%; text-align: center;
+        border: 1.5px solid #e4e7ec; border-radius: 12px; background: #fff;
+        transition: all .15s ease;
+    }
+    .bd-option:hover .bd-option-card { border-color: #98a2b3; }
+    .bd-option input:checked + .bd-option-card {
+        border-color: #1d4ed8; background: #eff6ff; box-shadow: 0 0 0 3px rgba(29, 78, 216, .12);
+    }
+    .bd-option-icon { font-size: 24px; line-height: 1; }
+    .bd-option-title { font-size: 13px; font-weight: 700; color: #101828; }
+    .bd-option-desc { font-size: 11px; color: #667085; line-height: 1.3; }
+    .bd-section { margin-top: 16px; }
+    .bd-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #344054; }
+    .bd-toggle { display: flex; gap: 10px; }
+    .bd-toggle label { flex: 1; margin: 0; cursor: pointer; }
+    .bd-toggle span {
+        display: block; padding: 10px; text-align: center; font-size: 13px; font-weight: 600;
+        color: #344054; border: 1.5px solid #e4e7ec; border-radius: 10px; transition: all .15s ease;
+    }
+    .bd-toggle label:hover span { border-color: #98a2b3; }
+    .bd-toggle input:checked + span { border-color: #1d4ed8; background: #eff6ff; color: #1d4ed8; }
+    #bd-remark {
+        width: 100%; padding: 10px 12px; font-size: 13px; resize: vertical;
+        border: 1.5px solid #e4e7ec; border-radius: 10px; outline: none; box-sizing: border-box;
+    }
+    #bd-remark:focus { border-color: #1d4ed8; box-shadow: 0 0 0 3px rgba(29, 78, 216, .12); }
+    .bd-confirm-btn { background: #1d4ed8 !important; border-radius: 10px !important; padding: 10px 24px !important; font-weight: 600 !important; }
+    @media (max-width: 480px) { .bd-options { grid-template-columns: 1fr; } }
+
+    /* Approve / deny dialog: what the earlier approvers did */
+    .ap-popup { border-radius: 16px; }
+    .ap-info { text-align: left; max-height: 55vh; overflow-y: auto; padding: 2px; }
+    .ap-title { margin: 12px 0 6px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #667085; }
+    .ap-title:first-child { margin-top: 0; }
+    .ap-row { padding: 8px 12px; margin-bottom: 6px; background: #f8f9fb; border: 1px solid #eef1f4; border-radius: 10px; }
+    .ap-row span { display: block; font-size: 11px; color: #667085; }
+    .ap-row strong { display: block; margin-top: 2px; font-size: 13px; font-weight: 600; color: #101828; white-space: pre-wrap; }
+    .ap-note { margin: 12px 0 0; font-size: 13px; color: #667085; text-align: center; }
+
+    /* Approval stage indicator */
+    .status-badge-wrap { white-space: normal; text-align: center; line-height: 1.3; border-radius: 12px; }
+    .stage-tracker { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; margin-top: 6px; }
+    .stage-step {
+        padding: 2px 7px; font-size: 10px; font-weight: 700; white-space: nowrap;
+        color: #667085; background: #f2f4f7; border: 1px solid #e4e7ec; border-radius: 999px;
+    }
+    .stage-step.done { color: #027a48; background: #ecfdf3; border-color: #abefc6; }
+    .stage-step.current { color: #b54708; background: #fffaeb; border-color: #fedf89; }
+    .stage-left { margin-top: 4px; font-size: 11px; font-weight: 600; color: #667085; }
+
+    /* Job Controller assessment modal */
+    .action-btn.jc-btn { background: #fffaeb; color: #b54708; border-color: #fedf89; }
+    .jc-modal { position: fixed; inset: 0; z-index: 999999; }
+    .jc-modal.hidden, .jc-combo-list.hidden, .jc-alat-panel.hidden, .jc-error.hidden { display: none; }
+    .jc-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); }
+    .jc-card {
+        position: relative; z-index: 1; width: min(620px, calc(100% - 32px)); max-height: calc(100vh - 48px);
+        overflow-y: auto; margin: 24px auto; background: #fff; border-radius: 18px; padding: 28px 30px;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+    }
+    .jc-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; }
+    .jc-header h3 { margin: 0; font-size: 20px; font-weight: 700; color: #101828; }
+    .jc-header p { margin: 4px 0 0; font-size: 13px; color: #667085; }
+    .jc-close {
+        position: absolute; top: 10px; right: 10px; width: 34px; height: 34px; padding: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        border: none; border-radius: 8px; background: transparent; font-size: 24px; line-height: 1;
+        color: #667085; cursor: pointer; transition: background .15s ease, color .15s ease;
+    }
+    .jc-close:hover { background: #e81123; color: #fff; }
+    .jc-header { padding-right: 36px; }
+    .jc-problem { padding: 12px 14px; margin-bottom: 16px; background: #f8f9fb; border: 1px solid #eef1f4; border-radius: 12px; }
+    .jc-problem span { display: block; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #667085; }
+    .jc-problem strong { display: block; margin-top: 4px; font-size: 13px; font-weight: 500; color: #101828; white-space: pre-wrap; }
+    .jc-field { margin-bottom: 16px; }
+    .jc-field > label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: #344054; }
+    .jc-field em { color: #d92d20; font-style: normal; }
+    .jc-field textarea, .jc-combo input[type="text"], .jc-alat-panel input {
+        width: 100%; padding: 10px 12px; font-size: 13px; border: 1.5px solid #e4e7ec; border-radius: 10px;
+        outline: none; box-sizing: border-box; background: #fff; color: #101828;
+    }
+    .jc-field textarea:focus, .jc-combo input[type="text"]:focus, .jc-alat-panel input:focus {
+        border-color: #1d4ed8; box-shadow: 0 0 0 3px rgba(29, 78, 216, .12);
+    }
+    .jc-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .jc-option { margin: 0; cursor: pointer; }
+    .jc-option input { position: absolute; opacity: 0; pointer-events: none; }
+    .jc-option-card {
+        display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; height: 100%;
+        border: 1.5px solid #e4e7ec; border-radius: 12px; transition: all .15s ease;
+    }
+    .jc-option:hover .jc-option-card { border-color: #98a2b3; }
+    .jc-option input:checked + .jc-option-card { border-color: #1d4ed8; background: #eff6ff; box-shadow: 0 0 0 3px rgba(29, 78, 216, .12); }
+    .jc-option-title { font-size: 13px; font-weight: 700; color: #101828; }
+    .jc-option-desc { font-size: 12px; color: #667085; }
+    .jc-combo { position: relative; }
+    .jc-combo-list {
+        position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 5; max-height: 220px; overflow-y: auto;
+        background: #fff; border: 1px solid #e4e7ec; border-radius: 10px; box-shadow: 0 8px 24px rgba(16, 24, 40, .12);
+    }
+    .jc-combo-item { padding: 9px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f2f4f7; }
+    .jc-combo-item:last-child { border-bottom: none; }
+    .jc-combo-item:hover { background: #eff6ff; }
+    .jc-combo-item small { display: block; color: #667085; font-size: 11px; }
+    .jc-combo-empty { padding: 10px 12px; font-size: 13px; color: #98a2b3; }
+    .jc-alat { margin-bottom: 16px; }
+    .jc-alat-btn {
+        display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; font-size: 13px; font-weight: 600;
+        color: #1d4ed8; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; cursor: pointer;
+    }
+    .jc-alat-panel { margin-top: 10px; padding: 12px; border: 1px solid #eef1f4; border-radius: 12px; background: #f8f9fb; }
+    .jc-alat-results { margin-top: 10px; max-height: 200px; overflow-y: auto; }
+    .jc-alat-row { display: flex; justify-content: space-between; gap: 10px; padding: 7px 4px; font-size: 13px; border-bottom: 1px solid #eef1f4; }
+    .jc-alat-row:last-child { border-bottom: none; }
+    .jc-stock { flex-shrink: 0; padding: 1px 8px; font-size: 11px; font-weight: 700; border-radius: 999px; background: #ecfdf3; color: #027a48; }
+    .jc-stock.out { background: #fef3f2; color: #b42318; }
+    .jc-error { margin-bottom: 12px; padding: 10px 12px; font-size: 13px; color: #b42318; background: #fef3f2; border-radius: 10px; }
+    .jc-footer { display: flex; justify-content: flex-end; gap: 10px; }
+    .jc-btn-submit { padding: 10px 20px; font-size: 13px; font-weight: 600; border: none; border-radius: 10px; cursor: pointer; }
+    .jc-btn-submit { background: #1d4ed8; color: #fff; }
+    @media (max-width: 480px) { .jc-options { grid-template-columns: 1fr; } }
 </style>
 
 @push('scripts')
@@ -1169,15 +1602,113 @@ function closePenyelenggaraanModal(id) {
     }
 }
 
-function markPenyelenggaraanDone(id) {
+function markBreakdownDone(id) {
+    const options = [
+        { value: 'PEMBAIKAN_TERUS', title: 'Pembaikan Terus', desc: 'Dibaiki di lokasi', icon: '🔧' },
+        { value: 'PUSKEB', title: 'PUSKEB', desc: 'Dihantar ke PUSKEB', icon: '🏢' },
+        { value: 'BENGKEL_PANEL', title: 'Bengkel Panel', desc: 'Dihantar ke bengkel panel', icon: '🛠️' }
+    ];
+
+    const optionHtml = options.map(function (o) {
+        return '<label class="bd-option">' +
+            '<input type="radio" name="bd-result" value="' + o.value + '">' +
+            '<span class="bd-option-card">' +
+            '<span class="bd-option-icon">' + o.icon + '</span>' +
+            '<span class="bd-option-title">' + o.title + '</span>' +
+            '<span class="bd-option-desc">' + o.desc + '</span>' +
+            '</span></label>';
+    }).join('');
+
+    Swal.fire({
+        title: 'Tandakan Selesai',
+        html:
+            '<div class="bd-modal">' +
+            '<p class="bd-subtitle">Pilih keputusan untuk kerosakan (breakdown) ini</p>' +
+            '<div class="bd-options">' + optionHtml + '</div>' +
+            '<div id="bd-towing-wrap" class="bd-section" style="display:none">' +
+            '<div class="bd-label">Towing diperlukan?</div>' +
+            '<div class="bd-toggle">' +
+            '<label><input type="radio" name="bd-towing" value="Y"><span>Ya</span></label>' +
+            '<label><input type="radio" name="bd-towing" value="N"><span>Tidak</span></label>' +
+            '</div></div>' +
+            '<div id="bd-remark-wrap" class="bd-section" style="display:none">' +
+            '<label class="bd-label" for="bd-remark" id="bd-remark-label">Catatan</label>' +
+            '<textarea id="bd-remark" rows="3" placeholder="Masukkan catatan..."></textarea>' +
+            '</div></div>',
+        showCloseButton: true,
+        confirmButtonText: 'Hantar',
+        width: 520,
+        customClass: {
+            popup: 'bd-swal-popup',
+            confirmButton: 'bd-confirm-btn'
+        },
+        didOpen: function (popup) {
+            const labels = {
+                PEMBAIKAN_TERUS: 'Catatan pembaikan yang telah dilakukan',
+                PUSKEB: 'Catatan (cth: sebab dihantar ke PUSKEB)',
+                BENGKEL_PANEL: 'Catatan (cth: sebab dihantar ke bengkel panel)'
+            };
+
+            popup.querySelectorAll('input[name="bd-result"]').forEach(function (radio) {
+                radio.addEventListener('change', function () {
+                    popup.querySelector('#bd-towing-wrap').style.display =
+                        this.value === 'PEMBAIKAN_TERUS' ? 'none' : 'block';
+                    popup.querySelector('#bd-remark-wrap').style.display = 'block';
+                    popup.querySelector('#bd-remark-label').textContent = labels[this.value];
+                    Swal.resetValidationMessage();
+                });
+            });
+        },
+        preConfirm: function () {
+            const popup = Swal.getPopup();
+            const result = popup.querySelector('input[name="bd-result"]:checked');
+            const towing = popup.querySelector('input[name="bd-towing"]:checked');
+            const remark = popup.querySelector('#bd-remark').value.trim();
+
+            if (!result) {
+                Swal.showValidationMessage('Sila pilih keputusan breakdown.');
+                return false;
+            }
+
+            if (result.value !== 'PEMBAIKAN_TERUS' && !towing) {
+                Swal.showValidationMessage('Sila pilih sama ada towing diperlukan atau tidak.');
+                return false;
+            }
+
+            if (!remark) {
+                Swal.showValidationMessage('Sila masukkan catatan.');
+                return false;
+            }
+
+            return {
+                result: result.value,
+                remark: remark,
+                towing: result.value === 'PEMBAIKAN_TERUS' ? '' : towing.value
+            };
+        }
+    }).then(function (res) {
+        if (res.isConfirmed) {
+            document.getElementById('mark-done-result-' + id).value = res.value.result;
+            document.getElementById('mark-done-remark-' + id).value = res.value.remark;
+            document.getElementById('mark-done-towing-' + id).value = res.value.towing;
+            document.getElementById('mark-done-form-' + id).submit();
+        }
+    });
+}
+
+function markPenyelenggaraanDone(id, isBreakdown) {
+    if (isBreakdown) {
+        markBreakdownDone(id);
+        return;
+    }
+
     Swal.fire({
         title: 'Tandakan Selesai',
         input: 'textarea',
         inputLabel: 'Catatan kerja yang telah dilakukan',
         inputPlaceholder: 'Masukkan catatan...',
-        showCancelButton: true,
+        showCloseButton: true,
         confirmButtonText: 'Hantar',
-        cancelButtonText: 'Batal',
         inputValidator: function (value) {
             if (!value || !value.trim()) {
                 return 'Sila masukkan catatan.';
@@ -1190,6 +1721,253 @@ function markPenyelenggaraanDone(id) {
         }
     });
 }
+
+const jcRoutes = {
+    assess: @json(route('penyelenggaraan-jc-assess', '__ID__')),
+    pj: @json(route('penyelenggaraan-pj-decision', '__ID__')),
+    jurutera: @json(route('penyelenggaraan-jurutera-decision', '__ID__')),
+    alatGanti: @json(route('penyelenggaraan-alat-ganti-search'))
+};
+
+const jcPanels = @json($bengkelPanels ?? []);
+
+function openJcModal(id, noPlat, noArahanKerja, kategori, problem) {
+    const modal = document.getElementById('jc-modal');
+    if (!modal) return;
+
+    document.getElementById('jc-form').action = jcRoutes.assess.replace('__ID__', id);
+    document.getElementById('jc-job-info').textContent = noPlat + ' • ' + noArahanKerja + ' • ' + kategori.replace(/_/g, ' ');
+    document.getElementById('jc-problem').textContent = problem || '-';
+    document.getElementById('jc-remark').value = '';
+    document.getElementById('jc-panel-search').value = '';
+    document.getElementById('jc-panel-id').value = '';
+    document.getElementById('jc-panel-field').style.display = 'none';
+    document.getElementById('jc-alat-panel').classList.add('hidden');
+    document.getElementById('jc-error').classList.add('hidden');
+    document.querySelectorAll('#jc-form input[name="repair_mode"]').forEach(function (r) { r.checked = false; });
+
+    modal.classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeJcModal() {
+    const modal = document.getElementById('jc-modal');
+    if (!modal) return;
+
+    modal.classList.add('hidden');
+    document.body.style.overflow = '';
+}
+
+function escapeApprovalHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text == null ? '' : String(text);
+    return div.innerHTML;
+}
+
+function approvalInfoHtml(noPlat, arahanKerja, info, isPj) {
+    const row = function (label, value) {
+        return value
+            ? '<div class="ap-row"><span>' + label + '</span><strong>' + escapeApprovalHtml(value) + '</strong></div>'
+            : '';
+    };
+
+    const mode = info.mode + (info.panel ? ' - ' + info.panel : '');
+    const jcBy = (info.jcBy || '-') + (info.jcAt ? ' • ' + info.jcAt : '');
+    const pjBy = (info.pjBy || '-') + (info.pjAt ? ' • ' + info.pjAt : '');
+
+    return '<div class="ap-info">' +
+        '<div class="ap-title">Tindakan Job Controller</div>' +
+        row('Kenderaan', noPlat + (info.kategori ? ' (' + info.kategori + ')' : '')) +
+        row('Masalah dilaporkan', info.masalah) +
+        row('Penilaian JC', info.jcRemark) +
+        row('Jenis pembaikan', mode) +
+        row('Dinilai oleh', jcBy) +
+        (isPj ? '' :
+            '<div class="ap-title">Kelulusan Penolong Jurutera</div>' +
+            row('No Arahan Kerja', arahanKerja) +
+            row('Diluluskan oleh', pjBy)) +
+        '</div>' +
+        '<p class="ap-note">' + (isPj
+            ? 'Jika diluluskan, permohonan akan dihantar kepada Pegawai Jurutera.'
+            : 'Jika diluluskan, no arahan kerja akan dijana dan kerja akan bermula (Dalam Proses).') + '</p>';
+}
+
+function decidePenyelenggaraan(id, stage, noPlat, arahanKerja, info) {
+    const isPj = stage === 'pj';
+
+    Swal.fire({
+        title: isPj ? 'Keputusan Penolong Jurutera' : 'Kelulusan Arahan Kerja',
+        html: approvalInfoHtml(noPlat, arahanKerja, info || {}, isPj),
+        width: 560,
+        customClass: { popup: 'ap-popup' },
+        showDenyButton: true,
+        showCloseButton: true,
+        confirmButtonText: 'Lulus',
+        denyButtonText: 'Tolak',
+        confirmButtonColor: '#12b76a',
+        denyButtonColor: '#d92d20'
+    }).then(function (res) {
+        const form = document.getElementById('decision-form');
+        form.action = jcRoutes[stage].replace('__ID__', id);
+
+        if (res.isConfirmed) {
+            document.getElementById('decision-value').value = 'approve';
+            document.getElementById('decision-remark').value = '';
+            form.submit();
+            return;
+        }
+
+        if (res.isDenied) {
+            Swal.fire({
+                title: 'Sebab Penolakan',
+                input: 'textarea',
+                inputPlaceholder: 'Masukkan sebab penolakan...',
+                showCloseButton: true,
+                confirmButtonText: 'Tolak Permohonan',
+                confirmButtonColor: '#d92d20',
+                inputValidator: function (value) {
+                    if (!value || !value.trim()) {
+                        return 'Sila masukkan sebab penolakan.';
+                    }
+                }
+            }).then(function (r2) {
+                if (r2.isConfirmed) {
+                    document.getElementById('decision-value').value = 'deny';
+                    document.getElementById('decision-remark').value = r2.value;
+                    form.submit();
+                }
+            });
+        }
+    });
+}
+
+(function initJcModal() {
+    const form = document.getElementById('jc-form');
+    if (!form) return;
+
+    const panelField = document.getElementById('jc-panel-field');
+    const panelSearch = document.getElementById('jc-panel-search');
+    const panelId = document.getElementById('jc-panel-id');
+    const panelList = document.getElementById('jc-panel-list');
+    const errorBox = document.getElementById('jc-error');
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text == null ? '' : String(text);
+        return div.innerHTML;
+    }
+
+    function renderPanels(term) {
+        const q = (term || '').trim().toLowerCase();
+        const matches = jcPanels.filter(function (p) {
+            return !q || (p.nama || '').toLowerCase().includes(q) || (p.kod || '').toLowerCase().includes(q);
+        }).slice(0, 50);
+
+        panelList.innerHTML = matches.length
+            ? matches.map(function (p) {
+                return '<div class="jc-combo-item" data-id="' + p.id + '" data-label="' + escapeHtml((p.kod ? p.kod + ' - ' : '') + p.nama) + '">' +
+                    escapeHtml(p.nama) + '<small>' + escapeHtml((p.kod || '') + (p.servis ? ' • ' + p.servis : '')) + '</small></div>';
+            }).join('')
+            : '<div class="jc-combo-empty">Tiada bengkel panel dijumpai.</div>';
+
+        panelList.classList.remove('hidden');
+    }
+
+    document.querySelectorAll('#jc-form input[name="repair_mode"]').forEach(function (radio) {
+        radio.addEventListener('change', function () {
+            panelField.style.display = this.value === 'BENGKEL_PANEL' ? 'block' : 'none';
+
+            if (this.value !== 'BENGKEL_PANEL') {
+                panelId.value = '';
+                panelSearch.value = '';
+            }
+        });
+    });
+
+    panelSearch.addEventListener('focus', function () { renderPanels(this.value); });
+    panelSearch.addEventListener('input', function () {
+        panelId.value = '';
+        renderPanels(this.value);
+    });
+
+    panelList.addEventListener('mousedown', function (event) {
+        const item = event.target.closest('.jc-combo-item');
+        if (!item) return;
+
+        panelId.value = item.dataset.id;
+        panelSearch.value = item.dataset.label;
+        panelList.classList.add('hidden');
+    });
+
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('.jc-combo')) {
+            panelList.classList.add('hidden');
+        }
+    });
+
+    // Alat ganti info panel (search as you type)
+    const alatPanel = document.getElementById('jc-alat-panel');
+    const alatSearch = document.getElementById('jc-alat-search');
+    const alatResults = document.getElementById('jc-alat-results');
+    let alatTimer = null;
+
+    function loadAlat() {
+        alatResults.innerHTML = '<div class="jc-combo-empty">Memuatkan...</div>';
+
+        fetch(jcRoutes.alatGanti + '?q=' + encodeURIComponent(alatSearch.value.trim()), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (items) {
+                alatResults.innerHTML = items.length
+                    ? items.map(function (a) {
+                        return '<div class="jc-alat-row"><span>' + escapeHtml(a.name) + '</span>' +
+                            '<span class="jc-stock' + (a.quantity > 0 ? '' : ' out') + '">Stok: ' + a.quantity + '</span></div>';
+                    }).join('')
+                    : '<div class="jc-combo-empty">Tiada alat ganti dijumpai.</div>';
+            })
+            .catch(function () {
+                alatResults.innerHTML = '<div class="jc-combo-empty">Gagal memuatkan senarai alat ganti.</div>';
+            });
+    }
+
+    document.getElementById('jc-alat-toggle').addEventListener('click', function () {
+        alatPanel.classList.toggle('hidden');
+
+        if (!alatPanel.classList.contains('hidden')) {
+            alatSearch.focus();
+            loadAlat();
+        }
+    });
+
+    alatSearch.addEventListener('input', function () {
+        clearTimeout(alatTimer);
+        alatTimer = setTimeout(loadAlat, 300);
+    });
+
+    form.addEventListener('submit', function (event) {
+        const mode = form.querySelector('input[name="repair_mode"]:checked');
+        let message = '';
+
+        if (!document.getElementById('jc-remark').value.trim()) {
+            message = 'Sila masukkan penilaian masalah.';
+        } else if (!mode) {
+            message = 'Sila pilih jenis pembaikan.';
+        } else if (mode.value === 'BENGKEL_PANEL' && !panelId.value) {
+            message = 'Sila pilih bengkel panel daripada senarai.';
+        }
+
+        if (message) {
+            event.preventDefault();
+            errorBox.textContent = message;
+            errorBox.classList.remove('hidden');
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape') closeJcModal();
+    });
+})();
 
 document.addEventListener('keydown', function (event) {
     if (event.key === 'Escape') {

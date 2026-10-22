@@ -28,7 +28,7 @@
         }
     }
 
-    if ($__canImpersonate && !$__isImpersonating) {
+    if ($__canImpersonate) {
         $__roleNames = \Illuminate\Support\Facades\DB::connection('oracle')
             ->table('roles')
             ->select('id', 'name')
@@ -45,14 +45,54 @@
 
         $__users = \Illuminate\Support\Facades\DB::connection('oracle')
             ->table('users')
-            ->select('nostaff', 'nama', 'module_role')
+            ->select('id', 'nostaff', 'nama', 'module_role')
             ->whereRaw("UPPER(status_data) = 'ACTIVE'")
             ->where('nostaff', '<>', $__realNostaff)
             ->orderBy('nama')
             ->get();
 
+        // Mechanics are listed under their own group (leader first), not under the generic role.
+        $__mekanikLabel = [];
+        $__mekanikLeader = [];
+
+        $__groupMembers = \Illuminate\Support\Facades\DB::connection('oracle')
+            ->table('MEKANIK_GROUP_MEMBER as m')
+            ->join('MEKANIK_GROUP as g', 'g.ID', '=', 'm.GROUP_ID')
+            ->select('m.user_id', 'm.is_leader', 'g.group_name')
+            ->whereRaw("UPPER(m.status_data) = 'ACTIVE'")
+            ->whereRaw("UPPER(g.status_data) = 'ACTIVE'")
+            ->get();
+
+        foreach ($__groupMembers as $__gm) {
+            $__gm = array_change_key_case((array) $__gm, CASE_LOWER);
+            $__mekanikLabel[$__gm['user_id']] = 'MEKANIK - ' . $__gm['group_name'];
+            $__mekanikLeader[$__gm['user_id']] = strtoupper(trim($__gm['is_leader'] ?? '')) === 'Y';
+        }
+
+        $__poolMembers = \Illuminate\Support\Facades\DB::connection('oracle')
+            ->table('MEKANIK_INDIVIDUAL_POOL')
+            ->select('user_id')
+            ->whereRaw("UPPER(status_data) = 'ACTIVE'")
+            ->get();
+
+        foreach ($__poolMembers as $__pm) {
+            $__pm = array_change_key_case((array) $__pm, CASE_LOWER);
+            $__mekanikLabel[$__pm['user_id']] ??= 'MEKANIK - Individu (Maintenance)';
+        }
+
         foreach ($__users as $__u) {
             $__u = array_change_key_case((array) $__u, CASE_LOWER);
+
+            if (isset($__mekanikLabel[$__u['id']])) {
+                $__groups[$__mekanikLabel[$__u['id']]][] = [
+                    'nostaff' => $__u['nostaff'],
+                    'nama' => $__u['nama'] . (!empty($__mekanikLeader[$__u['id']]) ? ' (Ketua)' : ''),
+                    'leader' => !empty($__mekanikLeader[$__u['id']]),
+                ];
+
+                continue;
+            }
+
             $__roles = json_decode($__u['module_role'] ?? '[]', true);
             $__labels = [];
 
@@ -70,6 +110,12 @@
             foreach (array_keys($__labels) ?: ['Tiada Peranan'] as $__label) {
                 $__groups[$__label][] = ['nostaff' => $__u['nostaff'], 'nama' => $__u['nama']];
             }
+        }
+
+        // Leader first within each mechanic group.
+        foreach ($__groups as $__label => $__list) {
+            usort($__list, fn ($a, $b) => (int) ($b['leader'] ?? 0) <=> (int) ($a['leader'] ?? 0));
+            $__groups[$__label] = $__list;
         }
 
         ksort($__groups);
@@ -110,27 +156,30 @@
                     <strong>{{ session('nostaff') }} - {{ session('nama') }}</strong>
                 </p>
 
-                <form method="POST" action="{{ route('impersonate-stop') }}">
+            @endif
+
+            <form method="POST" action="{{ route('impersonate-start') }}">
+                @csrf
+                <label for="impersonate-nostaff">{{ $__isImpersonating ? 'Tukar ke pengguna lain' : 'Pilih pengguna untuk diuji' }}</label>
+                <select id="impersonate-nostaff" name="nostaff" required>
+                    <option value="">-- Pilih Pengguna --</option>
+                    @foreach($__impersonateGroups as $__label => $__groupUsers)
+                        <optgroup label="{{ $__label }}">
+                            @foreach($__groupUsers as $__u)
+                                <option value="{{ $__u['nostaff'] }}" @selected($__u['nostaff'] === session('nostaff'))>{{ $__u['nama'] }} ({{ $__u['nostaff'] }})</option>
+                            @endforeach
+                        </optgroup>
+                    @endforeach
+                </select>
+                <button type="submit" class="impersonate-btn impersonate-btn-primary">Tukar Akaun</button>
+            </form>
+
+            @if($__isImpersonating)
+                <form method="POST" action="{{ route('impersonate-stop') }}" style="margin-top: 8px;">
                     @csrf
                     <button type="submit" class="impersonate-btn impersonate-btn-danger">
                         Kembali ke Akaun Asal ({{ $__impersonateOriginal['nostaff'] }})
                     </button>
-                </form>
-            @else
-                <form method="POST" action="{{ route('impersonate-start') }}">
-                    @csrf
-                    <label for="impersonate-nostaff">Pilih pengguna untuk diuji</label>
-                    <select id="impersonate-nostaff" name="nostaff" required>
-                        <option value="">-- Pilih Pengguna --</option>
-                        @foreach($__impersonateGroups as $__label => $__groupUsers)
-                            <optgroup label="{{ $__label }}">
-                                @foreach($__groupUsers as $__u)
-                                    <option value="{{ $__u['nostaff'] }}">{{ $__u['nama'] }} ({{ $__u['nostaff'] }})</option>
-                                @endforeach
-                            </optgroup>
-                        @endforeach
-                    </select>
-                    <button type="submit" class="impersonate-btn impersonate-btn-primary">Tukar Akaun</button>
                 </form>
             @endif
         </div>

@@ -39,7 +39,21 @@ class PenyelenggaraanController extends Controller
             })
             ->leftJoin('MEKANIK_GROUP as mg', 'mg.ID', '=', 'pa.GROUP_ID')
             ->leftJoin('USERS as mekanik', 'mekanik.ID', '=', 'pa.USER_ID')
+            ->leftJoin('BENGKEL_PANEL as bp', 'bp.ID', '=', 'pv.BENGKEL_PANEL_ID')
+            ->leftJoin('USERS as jcu', 'jcu.NOSTAFF', '=', 'pv.JC_BY')
+            ->leftJoin('USERS as pju', 'pju.NOSTAFF', '=', 'pv.PJ_BY')
             ->select(
+                DB::raw('jcu.NAMA as "JC_NAMA"'),
+                DB::raw('pv.JC_AT as "JC_AT"'),
+                DB::raw('pju.NAMA as "PJ_NAMA"'),
+                DB::raw('pv.PJ_AT as "PJ_AT"'),
+                DB::raw('pv.REPAIR_MODE as "REPAIR_MODE"'),
+                DB::raw('pv.BENGKEL_PANEL_ID as "BENGKEL_PANEL_ID"'),
+                DB::raw('bp.NAMA_PANEL as "BENGKEL_PANEL_NAMA"'),
+                DB::raw('pv.JC_REMARK as "JC_REMARK"'),
+                DB::raw('pv.NO_ARAHAN_KERJA as "NO_ARAHAN_KERJA"'),
+                DB::raw('pv.REMARK_REJECT as "REMARK_REJECT"'),
+                DB::raw('pv.REJECTED_STAGE as "REJECTED_STAGE"'),
                 DB::raw('pv.ID as "ID"'),
                 DB::raw('pv.NO_KERJA as "NO_KERJA"'),
                 DB::raw('pv.VEHICLE_ID as "VEHICLE_ID"'),
@@ -51,6 +65,8 @@ class PenyelenggaraanController extends Controller
                 DB::raw('kp.NAMA_KATEGORI as "KATEGORI_PENYELENGGARAAN_NAMA"'),
                 DB::raw('pv.REPAIR_REMARK as "REPAIR_REMARK"'),
                 DB::raw('pv.REMARK_DONE as "REMARK_DONE"'),
+                DB::raw('pv.BREAKDOWN_RESULT as "BREAKDOWN_RESULT"'),
+                DB::raw('pv.TOWING as "TOWING"'),
                 DB::raw('pv.LOCATION_LATITUDE as "LOCATION_LATITUDE"'),
                 DB::raw('pv.LOCATION_LONGITUDE as "LOCATION_LONGITUDE"'),
                 DB::raw('pv.LOCATION_NAME as "LOCATION_NAME"'),
@@ -110,9 +126,19 @@ class PenyelenggaraanController extends Controller
             ->filter()
             ->values();
 
+        // Job Controllers (and Pegawai Jurutera) also see the jobs of the categories they handle.
+        $jcKategori = $this->jcKategoriFor($currentUser);
+        $isPegawaiJurutera = $isSuperAdmin || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', self::ROLE_PEGAWAI_JURUTERA);
+        $visibleFlowKategori = $isPegawaiJurutera ? self::FLOW_KATEGORI : $jcKategori;
+
         if (!$isSuperAdmin && !$canAcceptPenyelenggaraan && !$canConfirmPenyelenggaraan) {
-            $penyelenggaraanQuery->where(function ($query) use ($currentUserId, $mekanikGroupIds) {
+            $penyelenggaraanQuery->where(function ($query) use ($currentUserId, $mekanikGroupIds, $visibleFlowKategori) {
                 $query->where('pv.CREATED_BY', session('nostaff'));
+
+                if (!empty($visibleFlowKategori)) {
+                    $placeholders = implode(',', array_fill(0, count($visibleFlowKategori), '?'));
+                    $query->orWhereRaw("UPPER(REPLACE(kp.NAMA_KATEGORI, '_', ' ')) IN ({$placeholders})", array_values($visibleFlowKategori));
+                }
 
                 if ($mekanikGroupIds->isNotEmpty()) {
                     $query->orWhereIn('pa.GROUP_ID', $mekanikGroupIds->toArray());
@@ -156,7 +182,35 @@ class PenyelenggaraanController extends Controller
                 ->groupBy(fn ($row) => $row->GROUP_ID ?? $row->group_id ?? null);
         }
 
+        $bengkelPanels = collect();
+
+        if ($isSuperAdmin || !empty($jcKategori)) {
+            $bengkelPanels = DB::connection('oracle')
+                ->table('BENGKEL_PANEL')
+                ->select(
+                    DB::raw('ID as "ID"'),
+                    DB::raw('NAMA_PANEL as "NAMA_PANEL"'),
+                    DB::raw('KOD_PANEL as "KOD_PANEL"'),
+                    DB::raw('SERVIS as "SERVIS"')
+                )
+                ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+                ->orderBy('NAMA_PANEL')
+                ->get()
+                ->map(fn ($p) => [
+                    'id' => $p->ID ?? $p->id,
+                    'nama' => $p->NAMA_PANEL ?? $p->nama_panel,
+                    'kod' => $p->KOD_PANEL ?? $p->kod_panel,
+                    'servis' => $p->SERVIS ?? $p->servis,
+                ])
+                ->values();
+        }
+
         return view('pages.penyelenggaraan.penyelenggaraan-list', [
+            'jcKategori' => $jcKategori,
+            'canApprovePj' => $isSuperAdmin || $this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', self::ROLE_PJ),
+            'canApproveJurutera' => $isPegawaiJurutera,
+            'bengkelPanels' => $bengkelPanels,
+            'flowKategori' => self::FLOW_KATEGORI,
             'title' => 'Senarai Penyelenggaraan',
             'penyelenggaraan' => $penyelenggaraan,
             'groupMembersMap' => $groupMembersMap,
@@ -453,7 +507,11 @@ class PenyelenggaraanController extends Controller
         $kategoriId = $penyelenggaraan->KATEGORI_PENYELENGGARAAN_ID ?? $penyelenggaraan->kategori_penyelenggaraan_id ?? null;
         $kategoriNama = $this->getKategoriPenyelenggaraanNama($kategoriId);
 
-        $requiresPengesahan = in_array($kategoriNama, [
+        // Every request is accepted by Pegawai PUSKEB (kaunter) first. Flow kategori then go to Pengesahan
+        // for Job Controller assessment; the mechanic is assigned once the Pegawai Jurutera approves.
+        $isFlow = $this->isFlowKategori($kategoriNama);
+
+        $requiresPengesahan = $isFlow || in_array($kategoriNama, [
             'BREAKDOWN',
             'SERVIS',
             'PEMBAIKAN_RINGAN',
@@ -478,7 +536,9 @@ class PenyelenggaraanController extends Controller
             return back()->with('error', 'Tiada rekod aktif dijumpai untuk dikemaskini.');
         }
 
-        $this->assignMekanik($id, $kategoriId);
+        if (!$isFlow) {
+            $this->assignMekanik($id, $kategoriId);
+        }
 
         return back()->with('success', 'Permohonan penyelenggaraan berjaya diterima.');
     }
@@ -508,6 +568,14 @@ class PenyelenggaraanController extends Controller
 
         if ($status !== 'PENGESAHAN') {
             return back()->with('error', 'Permohonan ini bukan dalam status menunggu pengesahan.');
+        }
+
+        $kategoriNama = $this->getKategoriPenyelenggaraanNama(
+            $penyelenggaraan->KATEGORI_PENYELENGGARAAN_ID ?? $penyelenggaraan->kategori_penyelenggaraan_id ?? null
+        );
+
+        if ($this->isFlowKategori($kategoriNama)) {
+            return back()->with('error', 'Sila gunakan butang lulus / tolak untuk kategori ini.');
         }
 
         $now = now('Asia/Kuala_Lumpur');
@@ -557,15 +625,51 @@ class PenyelenggaraanController extends Controller
             ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
             ->first();
 
-        if (!$isSuperAdmin && (!$assignment || !$this->isAssignmentLeader($assignment, $currentUserId))) {
+        // Jobs with no internal mechanic (bengkel panel / no mechanic flow) are closed by the Job Controller.
+        $kategoriNamaDone = $this->getKategoriPenyelenggaraanNama(
+            $penyelenggaraan->KATEGORI_PENYELENGGARAAN_ID ?? $penyelenggaraan->kategori_penyelenggaraan_id ?? null
+        );
+        $repairMode = strtoupper(trim($penyelenggaraan->REPAIR_MODE ?? $penyelenggaraan->repair_mode ?? ''));
+        $isJcOfJob = $this->isFlowKategori($kategoriNamaDone)
+            && in_array($this->normKategori($kategoriNamaDone), $this->jcKategoriFor($currentUser), true)
+            && ($repairMode === 'BENGKEL_PANEL' || !$assignment);
+
+        if (!$isSuperAdmin && !$isJcOfJob && (!$assignment || !$this->isAssignmentLeader($assignment, $currentUserId))) {
             abort(403, 'Hanya ketua kumpulan atau mekanik yang ditugaskan boleh menandakan selesai.');
         }
 
-        $request->validate([
-            'remark_done' => 'required|string',
-        ], [
-            'remark_done.required' => 'Sila masukkan catatan kerja yang telah dilakukan.',
-        ]);
+        $kategoriNama = $this->getKategoriPenyelenggaraanNama(
+            $penyelenggaraan->KATEGORI_PENYELENGGARAAN_ID ?? $penyelenggaraan->kategori_penyelenggaraan_id ?? null
+        );
+
+        $breakdownResult = null;
+        $towing = null;
+        $remarkDone = $request->remark_done;
+
+        if ($kategoriNama === 'BREAKDOWN') {
+            // Breakdown: repaired on the spot (remark), or sent to PUSKEB / bengkel panel (towing yes/no).
+            $request->validate([
+                'breakdown_result' => 'required|in:PEMBAIKAN_TERUS,PUSKEB,BENGKEL_PANEL',
+                'remark_done' => 'required|string',
+                'towing' => 'required_if:breakdown_result,PUSKEB,BENGKEL_PANEL|nullable|in:Y,N',
+            ], [
+                'breakdown_result.required' => 'Sila pilih keputusan breakdown.',
+                'breakdown_result.in' => 'Keputusan breakdown tidak sah.',
+                'remark_done.required' => 'Sila masukkan catatan.',
+                'towing.required_if' => 'Sila pilih sama ada towing diperlukan atau tidak.',
+                'towing.in' => 'Pilihan towing tidak sah.',
+            ]);
+
+            $breakdownResult = $request->breakdown_result;
+
+            $towing = $breakdownResult === 'PEMBAIKAN_TERUS' ? null : $request->towing;
+        } else {
+            $request->validate([
+                'remark_done' => 'required|string',
+            ], [
+                'remark_done.required' => 'Sila masukkan catatan kerja yang telah dilakukan.',
+            ]);
+        }
 
         $now = now('Asia/Kuala_Lumpur');
         $updatedBy = session('nostaff') ?? 'SYSTEM';
@@ -576,7 +680,9 @@ class PenyelenggaraanController extends Controller
             ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
             ->update([
                 'STATUS' => 'COMPLETED',
-                'REMARK_DONE' => $request->remark_done,
+                'REMARK_DONE' => $remarkDone,
+                'BREAKDOWN_RESULT' => $breakdownResult,
+                'TOWING' => $towing,
                 'COMPLETED_AT' => $now,
                 'UPDATED_BY' => $updatedBy,
                 'UPDATED_AT' => $now,
@@ -599,6 +705,278 @@ class PenyelenggaraanController extends Controller
         }
 
         return back()->with('success', 'Permohonan penyelenggaraan berjaya ditandakan selesai.');
+    }
+
+    // ---- Job Controller -> Penolong Jurutera -> Pegawai Jurutera flow ----
+    // Kimpalan, Aircond, Pembaikan Berat/Ringan and Servis. Breakdown and Pancit keep the old flow.
+
+    private const ROLE_PJ = 81;
+    private const ROLE_PEGAWAI_JURUTERA = 101;
+    private const ROLE_JC_MEKANIK = 121;
+    private const ROLE_JC_WELDING = 122;
+
+    private const FLOW_KATEGORI = ['PEMBAIKAN BERAT', 'PEMBAIKAN RINGAN', 'SERVIS', 'KIMPALAN', 'AIRCOND'];
+    private const JC_WELDING_KATEGORI = ['KIMPALAN'];
+    private const JC_MEKANIK_KATEGORI = ['PEMBAIKAN BERAT', 'PEMBAIKAN RINGAN', 'SERVIS', 'AIRCOND'];
+
+    private const STATUS_PENGESAHAN_JURUTERA = 'PENGESAHAN JURUTERA';
+
+    private function normKategori($nama)
+    {
+        return strtoupper(trim(str_replace('_', ' ', (string) $nama)));
+    }
+
+    private function isFlowKategori($nama)
+    {
+        return in_array($this->normKategori($nama), self::FLOW_KATEGORI, true);
+    }
+
+    // Kategori names the user may assess as Job Controller (users with both roles get both sets).
+    private function jcKategoriFor($user)
+    {
+        if ($this->isSuperAdminUser($user)) {
+            return self::FLOW_KATEGORI;
+        }
+
+        $allowed = [];
+
+        if ($this->hasUserModuleRole($user, 'PENYELENGGARAAN', self::ROLE_JC_WELDING)) {
+            $allowed = array_merge($allowed, self::JC_WELDING_KATEGORI);
+        }
+
+        if ($this->hasUserModuleRole($user, 'PENYELENGGARAAN', self::ROLE_JC_MEKANIK)) {
+            $allowed = array_merge($allowed, self::JC_MEKANIK_KATEGORI);
+        }
+
+        return array_values(array_unique($allowed));
+    }
+
+    // Loads the job and checks it is a flow kategori in the expected status; returns [row, kategoriNama] or a redirect.
+    private function loadFlowJob($id, $expectedStatus)
+    {
+        $row = DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'")
+            ->first();
+
+        if (!$row) {
+            return [null, null, back()->with('error', 'Rekod penyelenggaraan tidak dijumpai.')];
+        }
+
+        $kategoriNama = $this->getKategoriPenyelenggaraanNama(
+            $row->KATEGORI_PENYELENGGARAAN_ID ?? $row->kategori_penyelenggaraan_id ?? null
+        );
+
+        if (!$this->isFlowKategori($kategoriNama)) {
+            return [null, null, back()->with('error', 'Kategori ini tidak menggunakan aliran kelulusan Job Controller.')];
+        }
+
+        $status = strtoupper(trim($row->STATUS ?? $row->status ?? ''));
+
+        if ($expectedStatus !== null && $status !== $expectedStatus) {
+            return [null, null, back()->with('error', 'Status permohonan telah berubah. Sila muat semula halaman.')];
+        }
+
+        return [$row, $kategoriNama, null];
+    }
+
+    public function jcAssess(Request $request, $id)
+    {
+        $currentUser = $this->getCurrentUser();
+
+        [$row, $kategoriNama, $redirect] = $this->loadFlowJob($id, null);
+
+        if ($redirect) {
+            return $redirect;
+        }
+
+        // Job Controller assesses after Pegawai PUSKEB has accepted (Pengesahan, not yet assessed).
+        $rowStatus = strtoupper(trim($row->STATUS ?? $row->status ?? ''));
+        $assessed = trim((string) ($row->REPAIR_MODE ?? $row->repair_mode ?? '')) !== '';
+
+        if (!($rowStatus === 'PENGESAHAN' && !$assessed)) {
+            return back()->with('error', 'Status permohonan telah berubah. Sila muat semula halaman.');
+        }
+
+        if (!in_array($this->normKategori($kategoriNama), $this->jcKategoriFor($currentUser), true)) {
+            abort(403, 'Anda tidak mempunyai akses untuk menilai permohonan kategori ini.');
+        }
+
+        $request->validate([
+            'repair_mode' => 'required|in:INTERNAL,BENGKEL_PANEL',
+            'bengkel_panel_id' => 'required_if:repair_mode,BENGKEL_PANEL|nullable|exists:oracle.BENGKEL_PANEL,ID',
+            'jc_remark' => 'required|string',
+        ], [
+            'repair_mode.required' => 'Sila pilih jenis pembaikan.',
+            'repair_mode.in' => 'Jenis pembaikan tidak sah.',
+            'bengkel_panel_id.required_if' => 'Sila pilih bengkel panel.',
+            'bengkel_panel_id.exists' => 'Bengkel panel tidak sah.',
+            'jc_remark.required' => 'Sila masukkan penilaian masalah.',
+        ]);
+
+        $now = now('Asia/Kuala_Lumpur');
+        $by = session('nostaff') ?? 'SYSTEM';
+
+        DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->update([
+                'STATUS' => 'PENGESAHAN',
+                'REPAIR_MODE' => $request->repair_mode,
+                'BENGKEL_PANEL_ID' => $request->repair_mode === 'BENGKEL_PANEL' ? $request->bengkel_panel_id : null,
+                'JC_REMARK' => $request->jc_remark,
+                'JC_BY' => $by,
+                'JC_AT' => $now,
+                'PENDING_AT' => $now,
+                'UPDATED_BY' => $by,
+                'UPDATED_AT' => $now,
+            ]);
+
+        return back()->with('success', 'Penilaian dihantar kepada Penolong Jurutera untuk pengesahan.');
+    }
+
+    public function pjDecision(Request $request, $id)
+    {
+        $currentUser = $this->getCurrentUser();
+
+        if (!$this->isSuperAdminUser($currentUser)
+            && !$this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', self::ROLE_PJ)) {
+            abort(403, 'Hanya Penolong Jurutera boleh membuat keputusan ini.');
+        }
+
+        [$row, , $redirect] = $this->loadFlowJob($id, 'PENGESAHAN');
+
+        if ($redirect) {
+            return $redirect;
+        }
+
+        if (trim((string) ($row->REPAIR_MODE ?? $row->repair_mode ?? '')) === '') {
+            return back()->with('error', 'Permohonan ini belum dinilai oleh Job Controller.');
+        }
+
+        return $this->decide($request, $id, $row, 'PJ', self::STATUS_PENGESAHAN_JURUTERA);
+    }
+
+    public function masterDecision(Request $request, $id)
+    {
+        $currentUser = $this->getCurrentUser();
+
+        if (!$this->isSuperAdminUser($currentUser)
+            && !$this->hasUserModuleRole($currentUser, 'PENYELENGGARAAN', self::ROLE_PEGAWAI_JURUTERA)) {
+            abort(403, 'Hanya Pegawai Jurutera boleh meluluskan arahan kerja.');
+        }
+
+        [$row, , $redirect] = $this->loadFlowJob($id, self::STATUS_PENGESAHAN_JURUTERA);
+
+        if ($redirect) {
+            return $redirect;
+        }
+
+        return $this->decide($request, $id, $row, 'JURUTERA', 'IN PROGRESS');
+    }
+
+    // Shared approve / deny step. Approve by PJ also generates the arahan kerja number.
+    private function decide(Request $request, $id, $row, $stage, $nextStatus)
+    {
+        $request->validate([
+            'decision' => 'required|in:approve,deny',
+            'remark_reject' => 'required_if:decision,deny|nullable|string',
+        ], [
+            'decision.required' => 'Sila pilih keputusan.',
+            'remark_reject.required_if' => 'Sila masukkan sebab penolakan.',
+        ]);
+
+        $now = now('Asia/Kuala_Lumpur');
+        $by = session('nostaff') ?? 'SYSTEM';
+
+        if ($request->decision === 'deny') {
+            DB::connection('oracle')
+                ->table('PENYELENGGARAAN_VEHICLE')
+                ->where('ID', $id)
+                ->update([
+                    'STATUS' => 'CANCELLED',
+                    'REMARK_REJECT' => $request->remark_reject,
+                    'REJECTED_BY' => $by,
+                    'REJECTED_AT' => $now,
+                    'REJECTED_STAGE' => $stage,
+                    'UPDATED_BY' => $by,
+                    'UPDATED_AT' => $now,
+                ]);
+
+            return back()->with('success', 'Permohonan ditolak dan dipindahkan ke tab Batal.');
+        }
+
+        $update = [
+            'STATUS' => $nextStatus,
+            'UPDATED_BY' => $by,
+            'UPDATED_AT' => $now,
+        ];
+
+        if ($stage === 'PJ') {
+            $update['PJ_BY'] = $by;
+            $update['PJ_AT'] = $now;
+            $update['PENGESAHAN_AT'] = $now;
+        } else {
+            // Arahan kerja is issued once, when the request moves from pending to dalam proses.
+            $existing = $row->NO_ARAHAN_KERJA ?? $row->no_arahan_kerja ?? null;
+            $update['NO_ARAHAN_KERJA'] = $existing ?: \App\Helpers\NoKerjaHelper::next();
+            $update['JURUTERA_BY'] = $by;
+            $update['JURUTERA_AT'] = $now;
+        }
+
+        DB::connection('oracle')
+            ->table('PENYELENGGARAAN_VEHICLE')
+            ->where('ID', $id)
+            ->update($update);
+
+        if ($stage === 'JURUTERA') {
+            $this->assignMekanik(
+                $id,
+                $row->KATEGORI_PENYELENGGARAAN_ID ?? $row->kategori_penyelenggaraan_id ?? null
+            );
+
+            return back()->with('success', 'Arahan kerja diluluskan. Permohonan kini dalam proses.');
+        }
+
+        return back()->with('success', 'Permohonan diluluskan dan dihantar kepada Pegawai Jurutera.');
+    }
+
+    // Searchable alat ganti list for the Job Controller's info panel.
+    public function alatGantiSearch(Request $request)
+    {
+        $currentUser = $this->getCurrentUser();
+
+        if (empty($this->jcKategoriFor($currentUser))) {
+            abort(403, 'Anda tidak mempunyai akses.');
+        }
+
+        $q = strtoupper(trim((string) $request->query('q', '')));
+
+        $query = DB::connection('oracle')
+            ->table('ALAT_GANTI')
+            ->select(
+                DB::raw('ID as "ID"'),
+                DB::raw('NAME as "NAME"'),
+                DB::raw('QUANTITY as "QUANTITY"')
+            )
+            ->whereRaw("UPPER(STATUS_DATA) = 'ACTIVE'");
+
+        if ($q !== '') {
+            $query->whereRaw('UPPER(NAME) LIKE ?', ['%' . $q . '%']);
+        }
+
+        $items = $query
+            ->orderBy('NAME')
+            ->limit(50)
+            ->get()
+            ->map(fn ($r) => [
+                'id' => $r->ID ?? $r->id,
+                'name' => $r->NAME ?? $r->name,
+                'quantity' => (int) ($r->QUANTITY ?? $r->quantity ?? 0),
+            ]);
+
+        return response()->json($items);
     }
 
     private function isAssignmentLeader($assignment, $currentUserId)
@@ -664,8 +1042,6 @@ class PenyelenggaraanController extends Controller
             'repair_remark.required' => 'Sila masukkan keterangan kerosakan.',
         ]);
 
-        $noKerja = $this->generateNoKerja();
-
         $kategoriPenyelenggaraanId = $request->kategori_penyelenggaraan_id;
         $kategoriNama = $this->getKategoriPenyelenggaraanNama($kategoriPenyelenggaraanId);
 
@@ -696,7 +1072,6 @@ class PenyelenggaraanController extends Controller
         DB::connection('oracle')
             ->table('PENYELENGGARAAN_VEHICLE')
             ->insert([
-                'NO_KERJA' => $noKerja,
                 'VEHICLE_ID' => $request->vehicle_id,
                 'DRIVER_ID' => $request->driver_id,
                 'DRIVER_PHONE_NUM' => $request->driver_phone_num,
@@ -811,12 +1186,6 @@ class PenyelenggaraanController extends Controller
             ->value('NAMA_KATEGORI');
 
         return strtoupper(trim($nama ?? ''));
-    }
-
-    // Shared with Servis Harian (SERVIS_HARIAN.NO_ARAHAN_KERJA) so numbers never collide.
-    private function generateNoKerja()
-    {
-        return \App\Helpers\NoKerjaHelper::next();
     }
 
     private function getCurrentUser()

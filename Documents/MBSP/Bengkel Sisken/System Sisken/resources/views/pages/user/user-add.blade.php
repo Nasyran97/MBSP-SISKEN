@@ -263,7 +263,7 @@
                     if (optionValue === currentValue) {
                         option.disabled = false;
                     } else {
-                        option.disabled = selectedModules.includes(optionValue);
+                        option.disabled = false;
                     }
                 });
             });
@@ -273,15 +273,7 @@
                 return;
             }
     
-            const totalModuleOptions = moduleSelects.length
-                ? Array.from(moduleSelects[0].options).filter(function (option) {
-                    return option.value;
-                }).length
-                : 0;
-    
-            const uniqueSelectedCount = [...new Set(selectedModules)].length;
-    
-            setAddRowButtonDisabled(uniqueSelectedCount >= totalModuleOptions);
+            setAddRowButtonDisabled(false);
         }
     
         function applySuperadminMode(row) {

@@ -54,16 +54,13 @@
         document.addEventListener('alpine:init', () => {
             Alpine.store('theme', {
                 init() {
-                    const savedTheme = localStorage.getItem('theme');
-                    const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' :
-                        'light';
-                    this.theme = savedTheme || systemTheme;
+                    this.theme = 'light'; // dark mode disabled
                     this.updateTheme();
                 },
                 theme: 'light',
                 toggle() {
-                    this.theme = this.theme === 'light' ? 'dark' : 'light';
-                    localStorage.setItem('theme', this.theme);
+                    // dark mode disabled: always light
+                    this.theme = 'light';
                     this.updateTheme();
                 },
                 updateTheme() {
@@ -113,9 +110,8 @@
     <!-- Apply dark mode immediately to prevent flash -->
     <script>
         (function() {
-            const savedTheme = localStorage.getItem('theme');
-            const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-            const theme = savedTheme || systemTheme;
+            const theme = 'light'; // dark mode disabled
+            try { localStorage.setItem('theme', 'light'); } catch (e) {}
             if (theme === 'dark') {
                 document.documentElement.classList.add('dark');
                 document.body.classList.add('dark', 'bg-gray-900');

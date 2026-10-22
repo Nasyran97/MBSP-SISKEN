@@ -340,6 +340,10 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::post('/penyelenggaraan/{id}/delete', [PenyelenggaraanController::class, 'delete'])->name('penyelenggaraan-delete');
     Route::post('/penyelenggaraan/{id}/accept', [PenyelenggaraanController::class, 'accept'])->name('penyelenggaraan-accept');
     Route::post('/penyelenggaraan/{id}/confirm', [PenyelenggaraanController::class, 'confirmPengesahan'])->name('penyelenggaraan-confirm');
+    Route::post('/penyelenggaraan/{id}/jc-assess', [PenyelenggaraanController::class, 'jcAssess'])->name('penyelenggaraan-jc-assess');
+    Route::post('/penyelenggaraan/{id}/pj-decision', [PenyelenggaraanController::class, 'pjDecision'])->name('penyelenggaraan-pj-decision');
+    Route::post('/penyelenggaraan/{id}/jurutera-decision', [PenyelenggaraanController::class, 'masterDecision'])->name('penyelenggaraan-jurutera-decision');
+    Route::get('/penyelenggaraan-alat-ganti-search', [PenyelenggaraanController::class, 'alatGantiSearch'])->name('penyelenggaraan-alat-ganti-search');
     Route::post('/penyelenggaraan/{id}/mark-done', [PenyelenggaraanController::class, 'markDone'])->name('penyelenggaraan-mark-done');
 
     //SIDEMENU UMUM - KALENDAR CUTI

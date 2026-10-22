@@ -176,18 +176,12 @@
                     if (option.value === currentValue) {
                         option.disabled = false;
                     } else {
-                        option.disabled = selectedModules.includes(option.value);
+                        option.disabled = false;
                     }
                 });
             });
     
-            const totalModuleOptions = moduleSelects.length
-                ? Array.from(moduleSelects[0].options).filter(option => option.value).length
-                : 0;
-    
-            const uniqueSelectedCount = [...new Set(selectedModules)].length;
-    
-            addRowBtn.disabled = uniqueSelectedCount >= totalModuleOptions;
+            addRowBtn.disabled = false;
             addRowBtn.classList.toggle('opacity-50', addRowBtn.disabled);
             addRowBtn.classList.toggle('cursor-not-allowed', addRowBtn.disabled);
         }

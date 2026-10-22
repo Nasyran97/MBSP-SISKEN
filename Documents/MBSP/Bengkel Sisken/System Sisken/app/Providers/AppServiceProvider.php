@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use App\Helpers\UserLog;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +22,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        DB::listen(fn (QueryExecuted $event) => UserLog::handle($event));
     }
 }

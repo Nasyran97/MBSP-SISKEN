@@ -176,10 +176,10 @@ class UserController extends Controller
                 ->withInput();
         }
 
-        $modules = array_column($moduleRoles, 'module');
-        if (count($modules) !== count(array_unique($modules))) {
+        $pairs = array_map(fn ($item) => $item['module'] . '|' . $item['role'], $moduleRoles);
+        if (count($pairs) !== count(array_unique($pairs))) {
             return back()
-                ->withErrors(['module_role' => 'Modul yang sama tidak boleh dipilih lebih daripada sekali.'])
+                ->withErrors(['module_role' => 'Kombinasi modul dan role yang sama tidak boleh dipilih lebih daripada sekali.'])
                 ->withInput();
         }
 
@@ -376,10 +376,10 @@ class UserController extends Controller
             ])->withInput();
         }
 
-        $modules = array_column($moduleRoles, 'module');
-        if (count($modules) !== count(array_unique($modules))) {
+        $pairs = array_map(fn ($item) => $item['module'] . '|' . $item['role'], $moduleRoles);
+        if (count($pairs) !== count(array_unique($pairs))) {
             return back()->withErrors([
-                'module_role' => 'Modul yang sama tidak boleh dipilih lebih daripada sekali.'
+                'module_role' => 'Kombinasi modul dan role yang sama tidak boleh dipilih lebih daripada sekali.'
             ])->withInput();
         }
 
