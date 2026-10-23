@@ -335,9 +335,11 @@ class MenuHelper
         }
 
         try {
-            $user = DB::connection('oracle')->table('USERS')->where('nostaff', $nostaff)->first();
+            return \Illuminate\Support\Facades\Cache::remember('menu_kelulusan_badge_' . $nostaff, 60, function () use ($nostaff) {
+                $user = DB::connection('oracle')->table('USERS')->where('nostaff', $nostaff)->first();
 
-            return $user ? \App\Helpers\ServisKelulusan::pendingCount($user) : 0;
+                return $user ? \App\Helpers\ServisKelulusan::pendingCount($user) : 0;
+            });
         } catch (\Throwable $e) {
             return 0;
         }

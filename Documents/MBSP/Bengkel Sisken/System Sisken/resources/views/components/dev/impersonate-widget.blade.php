@@ -6,10 +6,10 @@
     $__impersonateGroups = [];
 
     if ($__realNostaff) {
-        $__realUser = \Illuminate\Support\Facades\DB::connection('oracle')
+        $__realUser = \Illuminate\Support\Facades\Cache::remember('impersonate_real_user_' . $__realNostaff, 300, fn () => \Illuminate\Support\Facades\DB::connection('oracle')
             ->table('users')
             ->where('nostaff', $__realNostaff)
-            ->first();
+            ->first());
 
         if ($__realUser) {
             $__moduleRole = json_decode($__realUser->module_role ?? $__realUser->MODULE_ROLE ?? '[]', true);
@@ -29,10 +29,10 @@
     }
 
     if ($__canImpersonate) {
-        $__roleNames = \Illuminate\Support\Facades\DB::connection('oracle')
+        $__roleNames = \Illuminate\Support\Facades\Cache::remember('impersonate_role_names', 300, fn () => \Illuminate\Support\Facades\DB::connection('oracle')
             ->table('roles')
             ->select('id', 'name')
-            ->get()
+            ->get())
             ->mapWithKeys(function ($r) {
                 $r = array_change_key_case((array) $r, CASE_LOWER);
 
@@ -43,25 +43,25 @@
         // Group users by "MODULE - Role"; a user with several module roles is listed under each.
         $__groups = [];
 
-        $__users = \Illuminate\Support\Facades\DB::connection('oracle')
+        $__users = \Illuminate\Support\Facades\Cache::remember('impersonate_users_' . $__realNostaff, 300, fn () => \Illuminate\Support\Facades\DB::connection('oracle')
             ->table('users')
             ->select('id', 'nostaff', 'nama', 'module_role')
             ->whereRaw("UPPER(status_data) = 'ACTIVE'")
             ->where('nostaff', '<>', $__realNostaff)
             ->orderBy('nama')
-            ->get();
+            ->get());
 
         // Mechanics are listed under their own group (leader first), not under the generic role.
         $__mekanikLabel = [];
         $__mekanikLeader = [];
 
-        $__groupMembers = \Illuminate\Support\Facades\DB::connection('oracle')
+        $__groupMembers = \Illuminate\Support\Facades\Cache::remember('impersonate_group_members', 300, fn () => \Illuminate\Support\Facades\DB::connection('oracle')
             ->table('MEKANIK_GROUP_MEMBER as m')
             ->join('MEKANIK_GROUP as g', 'g.ID', '=', 'm.GROUP_ID')
             ->select('m.user_id', 'm.is_leader', 'g.group_name')
             ->whereRaw("UPPER(m.status_data) = 'ACTIVE'")
             ->whereRaw("UPPER(g.status_data) = 'ACTIVE'")
-            ->get();
+            ->get());
 
         foreach ($__groupMembers as $__gm) {
             $__gm = array_change_key_case((array) $__gm, CASE_LOWER);
@@ -69,11 +69,11 @@
             $__mekanikLeader[$__gm['user_id']] = strtoupper(trim($__gm['is_leader'] ?? '')) === 'Y';
         }
 
-        $__poolMembers = \Illuminate\Support\Facades\DB::connection('oracle')
+        $__poolMembers = \Illuminate\Support\Facades\Cache::remember('impersonate_pool_members', 300, fn () => \Illuminate\Support\Facades\DB::connection('oracle')
             ->table('MEKANIK_INDIVIDUAL_POOL')
             ->select('user_id')
             ->whereRaw("UPPER(status_data) = 'ACTIVE'")
-            ->get();
+            ->get());
 
         foreach ($__poolMembers as $__pm) {
             $__pm = array_change_key_case((array) $__pm, CASE_LOWER);

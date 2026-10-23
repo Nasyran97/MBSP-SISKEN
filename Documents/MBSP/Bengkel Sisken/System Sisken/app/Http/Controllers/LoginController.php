@@ -24,7 +24,7 @@ class LoginController extends Controller
         $hashedPassword = md5($request->password);
 
         // 1. Authenticate with external API
-        $response = Http::withBasicAuth('enforce', 'enforce@mbsp123')
+        $response = Http::timeout(10)->connectTimeout(5)->withBasicAuth('enforce', 'enforce@mbsp123')
             ->asForm()
             ->post($baseUrl, [
                 $apiKey    => $apiToken,
@@ -51,7 +51,7 @@ class LoginController extends Controller
         $staffApiKey = '633bb3e5a0993';
         $staffToken  = 'LBTXN72WW3JCS13W1WIUE485';
 
-        $staffResponse = Http::withBasicAuth('enforce', 'enforce@mbsp123')
+        $staffResponse = Http::timeout(10)->connectTimeout(5)->withBasicAuth('enforce', 'enforce@mbsp123')
             ->asForm()
             ->post($staffUrl, [
                 $staffApiKey => $staffToken,

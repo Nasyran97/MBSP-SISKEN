@@ -214,7 +214,7 @@ class TuntutanController extends Controller
         $departments = [];
     
         try {
-            $response = Http::withBasicAuth('enforce', 'enforce@mbsp123')
+            $response = Http::timeout(10)->connectTimeout(5)->withBasicAuth('enforce', 'enforce@mbsp123')
                 ->asForm()
                 ->post('https://apimbsp.mbsp.gov.my/public/APIS_6874be6b13258/data/department', [
                     '6874be6b13269' => 'XHWBIEWPB0UKNLO505Q2B171'
@@ -510,7 +510,7 @@ class TuntutanController extends Controller
         $departments = [];
     
         try {
-            $response = Http::withBasicAuth('enforce', 'enforce@mbsp123')
+            $response = Http::timeout(10)->connectTimeout(5)->withBasicAuth('enforce', 'enforce@mbsp123')
                 ->asForm()
                 ->post('https://apimbsp.mbsp.gov.my/public/APIS_6874be6b13258/data/department', [
                     '6874be6b13269' => 'XHWBIEWPB0UKNLO505Q2B171'

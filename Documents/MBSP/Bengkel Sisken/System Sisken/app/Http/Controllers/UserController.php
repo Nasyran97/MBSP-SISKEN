@@ -78,7 +78,7 @@ class UserController extends Controller
         $modules = [];
 
         try {
-            $response = Http::withBasicAuth(
+            $response = Http::timeout(10)->connectTimeout(5)->withBasicAuth(
                     config('services.mbsp.username'),
                     config('services.mbsp.password')
                 )
@@ -206,7 +206,7 @@ class UserController extends Controller
         ]);
 
         try {
-            $response = Http::withBasicAuth(
+            $response = Http::timeout(10)->connectTimeout(5)->withBasicAuth(
                     config('services.mbsp.username'),
                     config('services.mbsp.password')
                 )
