@@ -7,6 +7,30 @@ use Illuminate\Support\Facades\DB;
 
 class LupusController extends Controller
 {
+    // Only SUPERADMIN (role 1) and INSURANS admin (role 21) may edit lupus records.
+    private function canEditLupus(): bool
+    {
+        $nostaff = session('nostaff');
+
+        if (!$nostaff) {
+            return false;
+        }
+
+        $user = DB::connection('oracle')->table('USERS')->where('nostaff', $nostaff)->first();
+        $moduleRole = json_decode($user->MODULE_ROLE ?? $user->module_role ?? '[]', true);
+
+        foreach (is_array($moduleRole) ? $moduleRole : [] as $item) {
+            $module = strtoupper(trim($item['module'] ?? ''));
+            $role = (int) ($item['role'] ?? 0);
+
+            if (($module === 'SUPERADMIN' && $role === 1) || ($module === 'INSURANS' && $role === 21)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function lupusCarAdd()
     {
         return view('pages.lupus.lupus-data-add', [
@@ -44,10 +68,7 @@ class LupusController extends Controller
         DB::connection('oracle')
             ->table('VEHICLE_LUPUS')
             ->insert([
-                'NO_PLAT' => strtoupper(trim($request->no_plat)),
                 'PEMBELI' => strtoupper(trim($request->pembeli)),
-                'BUATAN' => strtoupper(trim($request->buatan)),
-                'MODEL' => strtoupper(trim($request->model)),
                 'HARGA_JUALAN' => $request->harga_jualan,
 
                 'TARIKH_LUPUS' => $request->tarikh_lupus,
@@ -107,24 +128,27 @@ class LupusController extends Controller
 
     public function lupusCarEdit($id)
     {
+        abort_unless($this->canEditLupus(), 403, 'Anda tidak mempunyai akses untuk mengemaskini rekod lupus.');
+
         $lupus = DB::connection('oracle')
-            ->table('VEHICLE_LUPUS')
+            ->table('VEHICLE_LUPUS as vl')
+            ->leftJoin('VEHICLE as v', 'v.ID', '=', 'vl.VEHICLE_ID')
             ->select(
-                DB::raw('ID as "ID"'),
-                DB::raw('NO_PLAT as "NO_PLAT"'),
-                DB::raw('PEMBELI as "PEMBELI"'),
-                DB::raw('BUATAN as "BUATAN"'),
-                DB::raw('MODEL as "MODEL"'),
-                DB::raw('HARGA_JUALAN as "HARGA_JUALAN"'),
-                DB::raw('TARIKH_LUPUS as "TARIKH_LUPUS"'),
-                DB::raw('KAEDAH_JUALAN as "KAEDAH_JUALAN"'),
-                DB::raw('CUKAI_KASTAM as "CUKAI_KASTAM"'),
-                DB::raw('TARIKH_LELONG as "TARIKH_LELONG"'),
-                DB::raw('STATUS_LUPUS as "STATUS_LUPUS"'),
-                DB::raw('TARIKH_TUKAR_MILIK as "TARIKH_TUKAR_MILIK"'),
-                DB::raw('TARIKH_PUSPAKOM as "TARIKH_PUSPAKOM"')
+                DB::raw('vl.ID as "ID"'),
+                DB::raw('v.NO_PLAT as "NO_PLAT"'),
+                DB::raw('vl.PEMBELI as "PEMBELI"'),
+                DB::raw('v.BUATAN as "BUATAN"'),
+                DB::raw('v.MODEL as "MODEL"'),
+                DB::raw('vl.HARGA_JUALAN as "HARGA_JUALAN"'),
+                DB::raw('vl.TARIKH_LUPUS as "TARIKH_LUPUS"'),
+                DB::raw('vl.KAEDAH_JUALAN as "KAEDAH_JUALAN"'),
+                DB::raw('vl.CUKAI_KASTAM as "CUKAI_KASTAM"'),
+                DB::raw('vl.TARIKH_LELONG as "TARIKH_LELONG"'),
+                DB::raw('vl.STATUS_LUPUS as "STATUS_LUPUS"'),
+                DB::raw('vl.TARIKH_TUKAR_MILIK as "TARIKH_TUKAR_MILIK"'),
+                DB::raw('vl.TARIKH_PUSPAKOM as "TARIKH_PUSPAKOM"')
             )
-            ->where('ID', $id)
+            ->where('vl.ID', $id)
             ->first();
     
         if (!$lupus) {
@@ -141,11 +165,10 @@ class LupusController extends Controller
 
     public function lupusCarUpdate(Request $request, $id)
     {
+        abort_unless($this->canEditLupus(), 403, 'Anda tidak mempunyai akses untuk mengemaskini rekod lupus.');
+
         $request->validate([
-            'no_plat' => 'required|string|max:50',
             'pembeli' => 'required|string|max:255',
-            'buatan' => 'required|string|max:255',
-            'model' => 'required|string|max:255',
             'harga_jualan' => 'required|numeric|min:0',
     
             'tarikh_lupus' => 'nullable|date',
@@ -172,10 +195,7 @@ class LupusController extends Controller
             ->table('VEHICLE_LUPUS')
             ->where('ID', $id)
             ->update([
-                'NO_PLAT' => strtoupper(trim($request->no_plat)),
                 'PEMBELI' => strtoupper(trim($request->pembeli)),
-                'BUATAN' => strtoupper(trim($request->buatan)),
-                'MODEL' => strtoupper(trim($request->model)),
                 'HARGA_JUALAN' => $request->harga_jualan,
     
                 'TARIKH_LUPUS' => $request->tarikh_lupus,
@@ -325,6 +345,7 @@ class LupusController extends Controller
         return view('pages.lupus.lupus-car-list', [
             'title' => 'Senarai Lupus Kenderaan',
             'lupusCars' => $lupusCars,
+            'canEdit' => $this->canEditLupus(),
         ]);
     }
 

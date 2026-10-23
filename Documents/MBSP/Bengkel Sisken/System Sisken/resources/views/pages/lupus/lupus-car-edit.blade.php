@@ -73,19 +73,13 @@
 
                     <div class="col-span-6">
                         <label class="form-label">
-                            No Plat <span class="text-red-600">*</span>
+                            No Plat
                         </label>
 
                         <input type="text"
-                            name="no_plat"
-                            value="{{ old('no_plat', $get('NO_PLAT')) }}"
-                            class="form-control uppercase"
-                            placeholder="Contoh: PLV 6296"
-                            required>
-
-                        @error('no_plat')
-                            <p class="form-error">{{ $message }}</p>
-                        @enderror
+                            value="{{ $get('NO_PLAT') }}"
+                            class="form-control uppercase bg-gray-100"
+                            readonly>
                     </div>
 
                     <div class="col-span-6">
@@ -107,36 +101,24 @@
 
                     <div class="col-span-6">
                         <label class="form-label">
-                            Buatan <span class="text-red-600">*</span>
+                            Buatan
                         </label>
 
                         <input type="text"
-                            name="buatan"
-                            value="{{ old('buatan', $get('BUATAN')) }}"
-                            class="form-control uppercase"
-                            placeholder="Contoh: TOYOTA"
-                            required>
-
-                        @error('buatan')
-                            <p class="form-error">{{ $message }}</p>
-                        @enderror
+                            value="{{ $get('BUATAN') }}"
+                            class="form-control uppercase bg-gray-100"
+                            readonly>
                     </div>
 
                     <div class="col-span-6">
                         <label class="form-label">
-                            Model <span class="text-red-600">*</span>
+                            Model
                         </label>
 
                         <input type="text"
-                            name="model"
-                            value="{{ old('model', $get('MODEL')) }}"
-                            class="form-control uppercase"
-                            placeholder="Contoh: HILUX"
-                            required>
-
-                        @error('model')
-                            <p class="form-error">{{ $message }}</p>
-                        @enderror
+                            value="{{ $get('MODEL') }}"
+                            class="form-control uppercase bg-gray-100"
+                            readonly>
                     </div>
 
                     <div class="col-span-6">

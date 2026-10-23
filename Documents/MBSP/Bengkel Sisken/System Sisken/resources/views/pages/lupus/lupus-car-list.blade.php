@@ -155,11 +155,13 @@
                                         ℹ️
                                     </button>
                 
-                                    {{-- <a href="{{ route('lupus-car-edit', $id) }}"
-                                        class="action-btn edit-btn"
-                                        title="Edit">
-                                        ✏️
-                                    </a> --}}
+                                    @if($canEdit ?? false)
+                                        <a href="{{ route('lupus-car-edit', $id) }}"
+                                            class="action-btn edit-btn"
+                                            title="Edit">
+                                            ✏️
+                                        </a>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
