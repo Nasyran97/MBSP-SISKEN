@@ -218,6 +218,9 @@
                                         <th>JKP ke JPJ</th>
                                         <th>JKP ke Jabatan</th>
                                         <th>Status</th>
+                                        @if($isSuperAdmin ?? false)
+                                            <th>Tindakan</th>
+                                        @endif
                                     </tr>
                                 </thead>
 
@@ -257,10 +260,62 @@
                                             <td>
                                                 {{ $rt->roadtax_status ?? '-' }}
                                             </td>
+
+                                            @if($isSuperAdmin ?? false)
+                                                <td>
+                                                    <button type="button"
+                                                        class="action-btn edit-btn"
+                                                        title="Kemaskini Tarikh"
+                                                        onclick="document.getElementById('roadtax-row-edit-{{ $rt->id }}').classList.toggle('hidden')">
+                                                        ✏️
+                                                    </button>
+                                                </td>
+                                            @endif
                                         </tr>
+
+                                        @if($isSuperAdmin ?? false)
+                                            <tr id="roadtax-row-edit-{{ $rt->id }}" class="hidden">
+                                                <td colspan="7">
+                                                    <form method="POST" action="{{ route('roadtax-update', $rt->id) }}"
+                                                        class="grid grid-cols-1 gap-3 p-3 md:grid-cols-5 items-end bg-gray-50 rounded-lg">
+                                                        @csrf
+                                                        @method('PUT')
+
+                                                        <label class="text-xs font-medium text-gray-700">Tarikh Mula
+                                                            <input type="date" name="tarikh_mula" required
+                                                                value="{{ !empty($rt->tarikh_mula) ? \Carbon\Carbon::parse($rt->tarikh_mula)->format('Y-m-d') : '' }}"
+                                                                class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                                                        </label>
+
+                                                        <label class="text-xs font-medium text-gray-700">Tarikh Tamat
+                                                            <input type="date" name="tarikh_tamat" required
+                                                                value="{{ !empty($rt->tarikh_tamat) ? \Carbon\Carbon::parse($rt->tarikh_tamat)->format('Y-m-d') : '' }}"
+                                                                class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                                                        </label>
+
+                                                        <label class="text-xs font-medium text-gray-700">JKP ke JPJ
+                                                            <input type="date" name="jkptojpj"
+                                                                value="{{ !empty($rt->jkptojpj) ? \Carbon\Carbon::parse($rt->jkptojpj)->format('Y-m-d') : '' }}"
+                                                                class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                                                        </label>
+
+                                                        <label class="text-xs font-medium text-gray-700">JKP ke Jabatan
+                                                            <input type="date" name="jkptojab"
+                                                                value="{{ !empty($rt->jkptojab) ? \Carbon\Carbon::parse($rt->jkptojab)->format('Y-m-d') : '' }}"
+                                                                class="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm">
+                                                        </label>
+
+                                                        <button type="submit"
+                                                            class="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                                                            Simpan
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        @endif
                                     @empty
                                         <tr>
-                                            <td colspan="6" class="text-center py-4 text-gray-500">
+                                            <td colspan="7" class="text-center py-4 text-gray-500">
                                                 Tiada sejarah cukai jalan.
                                             </td>
                                         </tr>

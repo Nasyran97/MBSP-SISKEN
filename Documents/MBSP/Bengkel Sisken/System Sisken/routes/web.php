@@ -256,6 +256,7 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::get('/cukai-jalan-info-list', [RoadTaxController::class, 'cukaiJalanInfoList'])->name('cukai-jalan-info-list');
     Route::get('/cukai-jalan-edaran-list', [RoadTaxController::class, 'cukaiJalanEdaranList'])->name('cukai-jalan-edaran-list');
     Route::post('/roadtax/store', [RoadTaxController::class, 'storeRoadtax'])->name('roadtax-store');
+    Route::put('/roadtax/{id}/update', [RoadTaxController::class, 'updateRoadtax'])->name('roadtax-update');
     Route::post('/roadtax/edaran/pdf', [RoadTaxController::class, 'printEdaranPdf'])->name('roadtax-edaran-pdf');
 
     //SIDEMENU CUKAI JALAN DAN INSURANS - INSURANS KENDERAAN MBSP

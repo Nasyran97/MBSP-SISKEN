@@ -489,6 +489,47 @@ class RoadTaxController extends Controller
         return back()->with('success', 'Rekod pembaharuan cukai jalan berjaya ditambah.');
     }
 
+    // Superadmin / Insurans admin: correct the dates of an existing roadtax record.
+    public function updateRoadtax(Request $request, $id)
+    {
+        [$hasFullAccess] = $this->getCurrentUserContext();
+
+        abort_unless($hasFullAccess, 403, 'Anda tidak mempunyai akses untuk mengemaskini rekod cukai jalan.');
+
+        $request->validate([
+            'tarikh_mula' => 'required|date',
+            'tarikh_tamat' => 'required|date|after_or_equal:tarikh_mula',
+            'jkptojpj' => 'nullable|date',
+            'jkptojab' => 'nullable|date',
+        ], [
+            'tarikh_tamat.after_or_equal' => 'Tarikh tamat mesti sama atau selepas tarikh mula.',
+        ]);
+
+        $exists = DB::connection('oracle')->table('VEHICLE_ROADTAX')->where('ID', $id)->exists();
+
+        if (!$exists) {
+            return back()->with('error', 'Rekod cukai jalan tidak dijumpai.');
+        }
+
+        $start = Carbon::parse($request->tarikh_mula)->format('Y-m-d');
+        $end = Carbon::parse($request->tarikh_tamat)->format('Y-m-d');
+
+        DB::connection('oracle')
+            ->table('VEHICLE_ROADTAX')
+            ->where('ID', $id)
+            ->update([
+                'TARIKH_MULA' => $start,
+                'TARIKH_TAMAT' => $end,
+                'JKPTOJPJ' => $request->filled('jkptojpj') ? $request->jkptojpj : null,
+                'JKPTOJAB' => $request->filled('jkptojab') ? $request->jkptojab : null,
+                'ROADTAX_STATUS' => $this->getRoadtaxStatus($start, $end),
+                'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
+                'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
+            ]);
+
+        return back()->with('success', 'Rekod cukai jalan berjaya dikemaskini.');
+    }
+
     public function printEdaranPdf(Request $request)
     {
         $ids = array_filter(explode(',', $request->selected_vehicle_ids));
