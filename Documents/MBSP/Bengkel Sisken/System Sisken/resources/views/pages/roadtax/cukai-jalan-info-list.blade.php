@@ -503,6 +503,41 @@
                                 </div>
                             @endif
 
+                            @if(($isSuperAdmin ?? false) && !$canRenew && !empty($car->roadtax_id))
+                                <div class="mt-4 grid grid-cols-12 gap-4">
+                                    <div class="col-span-6">
+                                        <label class="block mb-1 text-sm font-medium text-gray-700">
+                                            Tarikh Mula Cukai Jalan
+                                        </label>
+                                        <input type="text"
+                                            name="tarikh_mula"
+                                            value="{{ !empty($car->tarikh_mula)
+                                                ? \Carbon\Carbon::parse($car->tarikh_mula)->format('Y-m-d')
+                                                : ''
+                                            }}"
+                                            class="roadtax-date-picker jkp-start-date w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none"
+                                            placeholder="Pilih tarikh mula">
+                                    </div>
+
+                                    <div class="col-span-6">
+                                        <label class="block mb-1 text-sm font-medium text-gray-700">
+                                            Tarikh Tamat Cukai Jalan
+                                        </label>
+                                        <input type="text"
+                                            class="jkp-end-date w-full rounded-lg border border-gray-300 bg-gray-100 px-4 py-3 text-sm"
+                                            value="{{ !empty($car->tarikh_mula)
+                                                ? \Carbon\Carbon::parse($car->tarikh_mula)->addMonths(12)->subDay()->format('d-m-Y')
+                                                : ''
+                                            }}"
+                                            placeholder="Auto (12 bulan)"
+                                            readonly>
+                                    </div>
+                                    <p class="col-span-12 -mt-2 text-xs text-gray-500">
+                                        Tarikh tamat dikira automatik (12 bulan) selepas tarikh mula diubah.
+                                    </p>
+                                </div>
+                            @endif
+
                             <div class="grid grid-cols-12 gap-4 mt-4">
                                 <div class="col-span-6">
                                     <label class="block mb-1 text-sm font-medium text-gray-700">
@@ -1010,10 +1045,39 @@ document.addEventListener('input', function (e) {
     calculateRoadtaxRenewal(modal);
 });
 
+// Superadmin / Insurans admin: end date = start date + 12 months - 1 day
+function updateJkpEndDate(startInput) {
+    startInput = startInput.closest('form').querySelector('input[name="tarikh_mula"]');
+    const endInput = startInput.closest('form').querySelector('.jkp-end-date');
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(startInput.value.trim());
+
+    if (!endInput) return;
+
+    if (!m) {
+        endInput.value = '';
+        return;
+    }
+
+    const end = new Date(Number(m[1]) + 1, Number(m[2]) - 1, Number(m[3]) - 1);
+    const pad = (n) => String(n).padStart(2, '0');
+
+    endInput.value = pad(end.getDate()) + '-' + pad(end.getMonth() + 1) + '-' + end.getFullYear();
+}
+
+['change', 'input'].forEach(function (evt) {
+    document.addEventListener(evt, function (e) {
+        if (e.target.classList && e.target.classList.contains('jkp-start-date')) {
+            updateJkpEndDate(e.target);
+        }
+    });
+});
+
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof flatpickr !== 'undefined') {
         flatpickr(".roadtax-date-picker", {
             dateFormat: "Y-m-d",
+            altInput: true,
+            altFormat: "d-m-Y",
             allowInput: true,
             position: "above",
             appendTo: document.body

@@ -427,12 +427,23 @@ class RoadTaxController extends Controller
                 'roadtax_id' => 'required',
                 'jkptojpj' => 'nullable|date',
                 'jkptojab' => 'nullable|date',
+                'tarikh_mula' => 'nullable|date',
             ]);
 
             $data = [
                 'UPDATED_BY' => session('nostaff') ?? 'SYSTEM',
                 'UPDATED_AT' => now('Asia/Kuala_Lumpur'),
             ];
+
+            // Superadmin / Insurans admin may correct the start date; the end date follows (12 months).
+            if ($isSuperAdmin && $request->filled('tarikh_mula')) {
+                $start = Carbon::parse($request->tarikh_mula)->startOfDay();
+                $end = $start->copy()->addMonths(12)->subDay();
+
+                $data['TARIKH_MULA'] = $start->format('Y-m-d');
+                $data['TARIKH_TAMAT'] = $end->format('Y-m-d');
+                $data['ROADTAX_STATUS'] = $this->getRoadtaxStatus($start->format('Y-m-d'), $end->format('Y-m-d'));
+            }
 
             if ($request->filled('jkptojpj')) {
                 $data['JKPTOJPJ'] = $request->jkptojpj;
