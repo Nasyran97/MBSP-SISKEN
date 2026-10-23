@@ -24,6 +24,7 @@ class RoadTaxController extends Controller
             : null;
 
         $isSuperAdmin = false;
+        $isInsuransAdmin = false;
         $userId = $user->ID ?? $user->id ?? null;
 
         if ($user) {
@@ -38,11 +39,15 @@ class RoadTaxController extends Controller
                         $isSuperAdmin = true;
                         break;
                     }
+
+                    if ($module === 'INSURANS' && $roleId === 21) {
+                        $isInsuransAdmin = true;
+                    }
                 }
             }
         }
 
-        return [$isSuperAdmin, $userId];
+        return [$isSuperAdmin, $userId, $isSuperAdmin || $isInsuransAdmin];
     }
 
     private function getMyPengawasVehicleIds($userId)
@@ -84,10 +89,10 @@ class RoadTaxController extends Controller
 
     public function cukaiJalanInfoList(Request $request)
     {
-        [$isSuperAdmin, $currentUserId] = $this->getCurrentUserContext();
+        [$isSuperAdmin, $currentUserId, $canViewAll] = $this->getCurrentUserContext();
         $myPengawasVehicleIds = $this->getMyPengawasVehicleIds($currentUserId);
 
-        if (!$isSuperAdmin && empty($myPengawasVehicleIds)) {
+        if (!$canViewAll && empty($myPengawasVehicleIds)) {
             return view('pages.roadtax.cukai-jalan-info-list', [
                 'title' => 'Maklumat Cukai Jalan',
                 'cars' => collect(),
@@ -146,7 +151,7 @@ class RoadTaxController extends Controller
             )
             ->whereRaw("UPPER(v.STATUS_DATA) = 'ACTIVE'");
 
-        if (!$isSuperAdmin) {
+        if (!$canViewAll) {
             $query->whereIn('v.ID', $myPengawasVehicleIds);
         }
 
@@ -178,7 +183,7 @@ class RoadTaxController extends Controller
                 DB::raw('ROADTAX_STATUS as "roadtax_status"')
             );
 
-        if (!$isSuperAdmin) {
+        if (!$canViewAll) {
             $roadtaxHistoriesQuery->whereIn('VEHICLE_ID', $myPengawasVehicleIds);
         }
 
