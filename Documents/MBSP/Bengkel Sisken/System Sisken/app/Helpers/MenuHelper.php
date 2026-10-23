@@ -385,7 +385,7 @@ class MenuHelper
 
     private static function computeRoadtaxExpiringCount()
     {
-        $isSuperAdmin = self::isSuperAdmin();
+        $isSuperAdmin = self::isSuperAdmin() || self::isInsuransAdmin();
 
         $myVehicleIds = [];
 

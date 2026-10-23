@@ -47,7 +47,10 @@ class RoadTaxController extends Controller
             }
         }
 
-        return [$isSuperAdmin, $userId, $isSuperAdmin || $isInsuransAdmin];
+        // Insurans admin has full cukai jalan access, same as superadmin.
+        $hasFullAccess = $isSuperAdmin || $isInsuransAdmin;
+
+        return [$hasFullAccess, $userId, $hasFullAccess];
     }
 
     private function getMyPengawasVehicleIds($userId)
