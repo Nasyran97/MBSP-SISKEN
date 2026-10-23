@@ -9,7 +9,12 @@
 @source '../**/*.js';
 
 
-@custom-variant dark (&:is(.dark *));
+/* Dark mode disabled: this selector never matches, so every dark: utility is inert */
+@custom-variant dark (&:is(.dark-mode-disabled *));
+
+:root {
+  color-scheme: light only;
+}
 
 @theme {
   --font-*: initial;

@@ -51,7 +51,7 @@ class ServisKelulusan
         $query = DB::connection('oracle')
             ->table('SERVIS_HARIAN as s')
             ->join('VEHICLE as v', 'v.ID', '=', 's.VEHICLE_ID')
-            ->whereIn('s.STATUS', ['SUBMITTED', 'APPROVED']);
+            ->whereIn('s.STATUS', ['SUBMITTED', 'COMPLETE']);
 
         // Pegawai Jurutera sees all data; everyone else only their own.
         if (!$isOfficer) {
@@ -138,7 +138,7 @@ class ServisKelulusan
                 $pending[] = $r;
             }
 
-            if ($mine || ($isOfficer && $r->status === 'APPROVED')) {
+            if ($mine || ($isOfficer && $r->status === 'COMPLETE')) {
                 $r->peranan = $mine ? implode(', ', array_column($mine, 0)) : 'Pegawai Jurutera (pemantau)';
                 $r->diluluskan_at = collect($mine ? array_column($mine, 1) : [$r->jkjg_at, $r->driver_at, $r->jurutera_at])
                     ->filter()->sort()->last();

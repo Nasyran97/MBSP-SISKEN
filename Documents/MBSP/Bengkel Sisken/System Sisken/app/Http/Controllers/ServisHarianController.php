@@ -299,7 +299,7 @@ class ServisHarianController extends Controller
         $fresh = $this->findForm($id);
 
         if ($fresh->jkjg_approved_at && $fresh->jurutera_approved_at && ($fresh->driver_approved_at || !$fresh->driver_user_id)) {
-            DB::connection('oracle')->table('SERVIS_HARIAN')->where('ID', $form->id)->update(['STATUS' => 'APPROVED']);
+            DB::connection('oracle')->table('SERVIS_HARIAN')->where('ID', $form->id)->update(['STATUS' => 'COMPLETE']);
         }
 
         return redirect()->route('servis-harian-kelulusan')->with('success', 'Kelulusan berjaya direkodkan.');

@@ -28,7 +28,7 @@ return new class extends Migration
                 $table->string('masa_masuk', 5)->nullable();
                 $table->string('masa_keluar', 5)->nullable();
                 $table->string('no_arahan_kerja', 100)->nullable()->unique();
-                $table->string('status', 20)->default('DRAFT'); // DRAFT / SUBMITTED / APPROVED
+                $table->string('status', 20)->default('DRAFT'); // DRAFT / SUBMITTED / COMPLETE
                 $table->unsignedBigInteger('submitted_by')->nullable();
                 $table->timestamp('submitted_at', 6)->nullable();
                 $table->unsignedBigInteger('jkjg_user_id')->nullable();

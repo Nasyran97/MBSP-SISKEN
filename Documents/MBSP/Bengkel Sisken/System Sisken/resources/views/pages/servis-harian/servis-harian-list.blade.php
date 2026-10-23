@@ -34,7 +34,7 @@
                         @php
                             $status = $e->status ?? null;
                             $badge = match($status) {
-                                'APPROVED' => ['Diluluskan', 'bg-green-100 text-green-800'],
+                                'COMPLETE' => ['Selesai', 'bg-green-100 text-green-800'],
                                 'SUBMITTED' => ['Menunggu Kelulusan', 'bg-amber-100 text-amber-800'],
                                 'DRAFT' => ['Dalam Proses', 'bg-blue-100 text-blue-800'],
                                 default => ['Belum Mula', 'bg-gray-100 text-gray-700'],

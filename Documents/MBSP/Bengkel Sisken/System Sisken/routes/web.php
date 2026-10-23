@@ -322,6 +322,7 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     //KALENDAR SERVIS
     Route::get('/kalendar-service', [KalendarServiceController::class, 'index'])->name('kalendar-service');
     Route::post('/kalendar-service/generate', [KalendarServiceController::class, 'generate'])->name('kalendar-service-generate');
+    Route::post('/kalendar-service/move-day', [KalendarServiceController::class, 'moveDay'])->name('kalendar-service-move-day');
 
     //SERVIS HARIAN
     Route::get('/servis-harian', [ServisHarianController::class, 'index'])->name('servis-harian');

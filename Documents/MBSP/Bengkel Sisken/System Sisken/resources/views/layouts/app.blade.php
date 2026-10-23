@@ -5,6 +5,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="color-scheme" content="light only">
 
     <!-- Turbo Drive: swaps page content via AJAX instead of a full browser reload -->
     <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8/dist/turbo.min.js" data-turbo-track="reload"></script>

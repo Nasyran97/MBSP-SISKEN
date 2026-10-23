@@ -154,7 +154,7 @@
         </x-common.component-card>
     </form>
 
-    @if($form && in_array($status, ['SUBMITTED', 'APPROVED'], true))
+    @if($form && in_array($status, ['SUBMITTED', 'COMPLETE'], true))
         <div class="mt-6"></div>
 
         <x-common.component-card title="Kelulusan">
