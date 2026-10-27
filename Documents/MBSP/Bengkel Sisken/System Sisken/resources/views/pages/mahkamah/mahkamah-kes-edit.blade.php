@@ -284,9 +284,8 @@
             
                         <select name="vehicle_id"
                             id="vehicle_id"
-                            class="vehicle-select"
-                            required>
-                            <option value="" disabled>-- Sila Pilih No Plat --</option>
+                            class="vehicle-select">
+                            <option value="" {{ old('vehicle_id', $get('VEHICLE_ID')) ? '' : 'selected' }}>-- Tiada Kenderaan / Sila Pilih No Plat --</option>
             
                             @foreach($vehicles as $v)
                                 @php

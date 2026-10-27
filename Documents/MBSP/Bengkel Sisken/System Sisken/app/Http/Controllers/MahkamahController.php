@@ -324,16 +324,18 @@ class MahkamahController extends Controller
                 ->with('error', 'Jenis tuntutan mahkamah tidak dijumpai atau tidak aktif.');
         }
 
-        $vehicle = DB::connection('oracle')
-            ->table('VEHICLE')
-            ->where('ID', $request->vehicle_id)
-            ->first();
+        if ($request->filled('vehicle_id')) {
+            $vehicle = DB::connection('oracle')
+                ->table('VEHICLE')
+                ->where('ID', $request->vehicle_id)
+                ->first();
 
-        if (!$vehicle) {
-            return redirect()
-                ->back()
-                ->withInput()
-                ->with('error', 'Maklumat kenderaan tidak dijumpai.');
+            if (!$vehicle) {
+                return redirect()
+                    ->back()
+                    ->withInput()
+                    ->with('error', 'Maklumat kenderaan tidak dijumpai.');
+            }
         }
 
         $tuntutanName = $jenisTuntutan->TUNTUTAN_NAME
@@ -388,8 +390,10 @@ class MahkamahController extends Controller
                 'TUNTUTAN_MAHKAMAH_ID' => $request->tuntutan_mahkamah_id,
                 'JENIS_TUNTUTAN' => $tuntutanName,
 
-                'VEHICLE_ID' => $request->vehicle_id,
-                'NO_PLAT' => strtoupper(trim($request->no_plat ?? '')),
+                'VEHICLE_ID' => $request->filled('vehicle_id') ? $request->vehicle_id : null,
+                'NO_PLAT' => $request->filled('vehicle_id') && $request->filled('no_plat')
+                    ? strtoupper(trim($request->no_plat))
+                    : null,
 
                 'SYARIKAT_INSURANS_ID' => $request->syarikat_insurans_id,
                 'SYARIKAT_INSURANS' => $syarikatInsurans,
@@ -731,7 +735,7 @@ class MahkamahController extends Controller
             'no_kenderaan_jenis' => 'nullable|string|max:255',
             'penyata_tuntutan' => 'nullable|string',
             'tuntutan_mahkamah_id' => 'required',
-            'vehicle_id' => 'required',
+            'vehicle_id' => 'nullable',
             'no_plat' => 'nullable|string|max:50',
             'syarikat_insurans_id' => 'nullable',
             'syarikat_insurans' => 'nullable|string|max:255',
@@ -785,16 +789,18 @@ class MahkamahController extends Controller
                 ->with('error', 'Jenis tuntutan mahkamah tidak dijumpai atau tidak aktif.');
         }
     
-        $vehicle = DB::connection('oracle')
-            ->table('VEHICLE')
-            ->where('ID', $request->vehicle_id)
-            ->first();
-    
-        if (!$vehicle) {
-            return redirect()
-                ->back()
-                ->withInput()
-                ->with('error', 'Maklumat kenderaan tidak dijumpai.');
+        if ($request->filled('vehicle_id')) {
+            $vehicle = DB::connection('oracle')
+                ->table('VEHICLE')
+                ->where('ID', $request->vehicle_id)
+                ->first();
+
+            if (!$vehicle) {
+                return redirect()
+                    ->back()
+                    ->withInput()
+                    ->with('error', 'Maklumat kenderaan tidak dijumpai.');
+            }
         }
     
         $tuntutanName = $jenisTuntutan->TUNTUTAN_NAME
@@ -856,9 +862,11 @@ class MahkamahController extends Controller
                 'TUNTUTAN_MAHKAMAH_ID' => $request->tuntutan_mahkamah_id,
                 'JENIS_TUNTUTAN' => $tuntutanName,
     
-                'VEHICLE_ID' => $request->vehicle_id,
-                'NO_PLAT' => strtoupper(trim($request->no_plat ?? '')),
-    
+                'VEHICLE_ID' => $request->filled('vehicle_id') ? $request->vehicle_id : null,
+                'NO_PLAT' => $request->filled('vehicle_id') && $request->filled('no_plat')
+                    ? strtoupper(trim($request->no_plat))
+                    : null,
+
                 'SYARIKAT_INSURANS_ID' => $request->syarikat_insurans_id,
                 'SYARIKAT_INSURANS' => $syarikatInsurans,
     
