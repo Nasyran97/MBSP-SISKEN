@@ -590,21 +590,55 @@
             }
         }
 
+        let staffTom = null;
+
+        function initStaffSearch() {
+            if (staffTom) {
+                staffTom.destroy();
+                staffTom = null;
+            }
+
+            if (typeof TomSelect !== 'undefined' && staffSelect) {
+                staffTom = new TomSelect('#nostaff', {
+                    create: false,
+                    maxOptions: 5000,
+                    placeholder: 'Cari nama / no staf...',
+                    searchField: ['text'],
+                    sortField: {
+                        field: 'text',
+                        direction: 'asc'
+                    }
+                });
+            }
+        }
+
         function loadStaffByDepartment(kodJabatanStaff, selectedNoStaff = '') {
             if (!staffSelect) {
                 return;
             }
 
+            if (staffTom) {
+                staffTom.destroy();
+                staffTom = null;
+            }
+
             staffSelect.innerHTML = '<option value="">-- Loading Nama Staf --</option>';
             staffSelect.disabled = true;
             staffSelect.classList.add('bg-gray-50');
+            initStaffSearch();
 
             clearStaffFields();
 
             if (!kodJabatanStaff) {
+                if (staffTom) {
+                    staffTom.destroy();
+                    staffTom = null;
+                }
+
                 staffSelect.innerHTML = '<option value="" selected disabled>-- Sila Pilih Jabatan Dahulu --</option>';
                 staffSelect.disabled = true;
                 staffSelect.classList.add('bg-gray-50');
+                initStaffSearch();
                 return;
             }
 
@@ -621,6 +655,11 @@
             })
             .then(response => response.json())
             .then(data => {
+                if (staffTom) {
+                    staffTom.destroy();
+                    staffTom = null;
+                }
+
                 staffSelect.innerHTML = '<option value="" selected disabled>-- Sila Pilih Nama Staf --</option>';
 
                 const staffs = data.data ?? data.staffs ?? [];
@@ -652,12 +691,14 @@
 
                     staffSelect.disabled = false;
                     staffSelect.classList.remove('bg-gray-50');
+                    initStaffSearch();
 
                     setSelectedStaffHiddenValue();
                 } else {
                     staffSelect.innerHTML = '<option value="">-- Tiada Staf Dijumpai --</option>';
                     staffSelect.disabled = true;
                     staffSelect.classList.add('bg-gray-50');
+                    initStaffSearch();
 
                     clearStaffFields();
                 }
@@ -665,9 +706,15 @@
             .catch(error => {
                 console.error('Staff API error:', error);
 
+                if (staffTom) {
+                    staffTom.destroy();
+                    staffTom = null;
+                }
+
                 staffSelect.innerHTML = '<option value="">-- Ralat Semasa Ambil Data Staf --</option>';
                 staffSelect.disabled = true;
                 staffSelect.classList.add('bg-gray-50');
+                initStaffSearch();
 
                 clearStaffFields();
             });
@@ -721,8 +768,22 @@
             });
         }
     
+        if (typeof TomSelect !== 'undefined' && departmentSelect) {
+            new TomSelect('#department', {
+                create: false,
+                maxOptions: 5000,
+                placeholder: 'Cari jabatan...',
+                searchField: ['text'],
+                sortField: {
+                    field: 'text',
+                    direction: 'asc'
+                }
+            });
+        }
+
         initVehicleSearch();
-    
+        initStaffSearch();
+
         if (vehicleTom && vehicleSelect && vehicleSelect.value) {
             vehicleTom.trigger('change', vehicleSelect.value);
         }
