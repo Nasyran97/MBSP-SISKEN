@@ -62,7 +62,7 @@ return [
 
         'synology' => [
             'driver' => 'local',
-            'root' => env('SYNOLOGY_BASE_PATH', '\\\\10.10.110.17\\sisken'),
+            'root' => env('SYNOLOGY_BASE_PATH', '\\\\10.10.110.17\\sisken\\Staging'),
         ],
 
     ],

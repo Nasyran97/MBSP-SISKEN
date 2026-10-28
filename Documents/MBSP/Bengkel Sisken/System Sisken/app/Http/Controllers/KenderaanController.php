@@ -93,7 +93,7 @@ class KenderaanController extends Controller
                 DB::raw('u.NAMA as "PENGAWAS_KENDERAAN"'),
                 DB::raw('u.NOSTAFF as "PENGAWAS_NOSTAFF"')
             )
-            ->whereRaw("UPPER(v.STATUS_DATA) = 'ACTIVE'")
+            ->whereRaw("UPPER(v.STATUS_DATA) IN ('ACTIVE', 'INACTIVE')")
             ->orderBy('v.ID', 'DESC')
             ->get();
     }
@@ -576,7 +576,9 @@ class KenderaanController extends Controller
         $newFileName = now()->format('Ymd_His') . '_' . $safeName . '.' . $extension;
         $filePath = $folder . '/' . $newFileName;
 
-        Storage::disk('synology')->putFileAs($folder, $file, $newFileName);
+        // Pass the raw temp path: on IIS, getRealPath() returns false when the app pool
+        // cannot traverse the temp dir, which makes putFileAs() fail with "Path cannot be empty".
+        Storage::disk('synology')->putFileAs($folder, $file->getPathname(), $newFileName);
 
         DB::connection('oracle')
             ->table('VEHICLE')

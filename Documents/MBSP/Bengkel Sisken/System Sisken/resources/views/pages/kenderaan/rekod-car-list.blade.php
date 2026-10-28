@@ -125,7 +125,7 @@
 
                             <td>
                                 <span class="status-badge {{ $statusClass }}">
-                                    {{ $status }}
+                                    {{ $status === 'INACTIVE' ? 'TAK AKTIF' : $status }}
                                 </span>
                             </td>
 
@@ -217,7 +217,7 @@
                 'Alamat Pembekal' => $car->ALAMAT_PEMBEKAL ?? $car->alamat_pembekal ?? '-',
                 'Tarikh Beli' => $formatDate($car->TARIKH_BELI ?? $car->tarikh_beli ?? null),
                 'Harga Beli' => $car->HARGA_BELI ?? $car->harga_beli ?? '-',
-                'Status' => $car->STATUS_DATA ?? $car->status_data ?? '-',
+                'Status' => $status === 'INACTIVE' ? 'TAK AKTIF' : ($car->STATUS_DATA ?? $car->status_data ?? '-'),
             ];
         @endphp
 
