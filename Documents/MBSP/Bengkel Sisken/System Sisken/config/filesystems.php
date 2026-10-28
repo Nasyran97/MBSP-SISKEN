@@ -62,7 +62,8 @@ return [
 
         'synology' => [
             'driver' => 'local',
-            'root' => env('SYNOLOGY_BASE_PATH', '\\\\10.10.110.17\\sisken\\Staging'),
+            // Set per environment in .env (Staging / Production folder); never hardcode the folder here.
+            'root' => env('SYNOLOGY_BASE_PATH', '\\\\10.10.110.17\\sisken'),
         ],
 
     ],
