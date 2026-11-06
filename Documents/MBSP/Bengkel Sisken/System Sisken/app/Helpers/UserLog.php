@@ -66,6 +66,35 @@ class UserLog
         }
     }
 
+    /**
+     * Explicitly record an auth event (LOGIN / LOGOUT) into user_log.
+     */
+    public static function auth(string $action, $userId, ?string $nostaff, ?string $nama): void
+    {
+        self::$writing = true;
+        try {
+            $request = request();
+
+            DB::connection('oracle')->table('user_log')->insert([
+                'user_id'    => $userId,
+                'nostaff'    => $nostaff,
+                'nama'       => $nama,
+                'action'     => $action,
+                'table_name' => 'users',
+                'query'      => null,
+                'bindings'   => null,
+                'method'     => $request->method(),
+                'url'        => mb_substr($request->fullUrl(), 0, 500),
+                'ip_address' => $request->ip(),
+                'created_at' => now(),
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+        } finally {
+            self::$writing = false;
+        }
+    }
+
     private static function cleanBindings(array $bindings): array
     {
         return array_map(function ($v) {

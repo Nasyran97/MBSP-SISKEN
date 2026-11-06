@@ -149,9 +149,9 @@ class MenuHelper
                 'icon' => 'settings',
                 'name' => 'Tuntutan',
                 'subItems' => [
-                    ['name' => 'Senarai Tuntutan Awam', 'path' => '/tuntutan-awam-list', 'pro' => false],
-                    ['name' => 'Senarai Tuntutan Mahkamah', 'path' => '/mahkamah-tuntutan-list', 'pro' => false],
-                    ['name' => 'Senarai Tuntutan Pihak Ketiga', 'path' => '/pihak-ketiga-tuntutan-list', 'pro' => false],
+                    ['name' => 'Kes Liabiliti Awam', 'path' => '/tuntutan-awam-list', 'pro' => false],
+                    ['name' => 'Kes Perundangan', 'path' => '/mahkamah-tuntutan-list', 'pro' => false],
+                    ['name' => 'Kes Kemalangan Kenderaan MBSP', 'path' => '/pihak-ketiga-tuntutan-list', 'pro' => false],
                 ],
             ],
             [
@@ -209,9 +209,10 @@ class MenuHelper
                 ],
             ],[
                 'icon' => 'Lupus',
-                'name' => 'Kenderaan Lupus',
+                'name' => 'Kenderaan Lupus Dan Tidak Aktif',
                 'subItems' => [
                     ['name' => 'Senarai Kenderaan Lupus', 'path' => '/lupus-car-list', 'pro' => false],
+                    ['name' => 'Senarai Kenderaan Tak Aktif', 'path' => '/kenderaan-tak-aktif-list', 'pro' => false],
                     // ['name' => 'Tambah Data', 'path' => '/lupus-data-add', 'pro' => false],
                 ],
             ],[

@@ -22,12 +22,35 @@
     </div>
 
     <x-common.component-card title="Senarai Kemalangan Insurans">
+        @php
+            $jenisTuntutanOptions = collect($kemalangan)
+                ->map(fn ($r) => trim((string) (data_get($r, 'JENIS_TUNTUTAN_PIHAK_KETIGA') ?? data_get($r, 'jenis_tuntutan_pihak_ketiga') ?? '')))
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values();
+        @endphp
+
+        <div class="mb-4 flex items-center gap-3">
+            <label for="filterJenisTuntutan" class="text-sm font-medium text-gray-700">
+                Jenis Tuntutan Pihak Ketiga:
+            </label>
+            <select id="filterJenisTuntutan"
+                class="rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none">
+                <option value="">-- Semua --</option>
+                @foreach($jenisTuntutanOptions as $opt)
+                    <option value="{{ $opt }}">{{ $opt }}</option>
+                @endforeach
+            </select>
+        </div>
+
         <div class="p-1 overflow-x-auto">
             <table id="kemalanganTable" class="user-table">
                 <thead>
                     <tr>
                         <th>Bil</th>
                         <th>Tahun</th>
+                        <th>Jenis Tuntutan Pihak Ketiga</th>
                         <th>Tarikh Hantar Kes</th>
                         <th>No Plat</th>
                         <th>Tarikh Kejadian</th>
@@ -37,7 +60,6 @@
                         <th>Bahagian</th>
                         <th>No Plat Pihak Ketiga</th>
                         <th>Jenis Kenderaan Pihak Ketiga</th>
-                        <th>Jenis Tuntutan Pihak Ketiga</th>
                         <th class="text-center">Fail</th>
                         <th>Status Semasa Kes</th>
                         <th class="text-center">Action</th>
@@ -120,6 +142,10 @@
 
                             <td>{{ $tahun }}</td>
 
+                            <td class="cell-text">
+                                {{ $jenisTuntutanPihakKetiga }}
+                            </td>
+
                             <td>
                                 {{ !empty($tarikhHantarKes)
                                     ? \Carbon\Carbon::parse($tarikhHantarKes)->format('d/m/Y')
@@ -160,10 +186,6 @@
 
                             <td class="cell-text">
                                 {{ $jenisKenderaanPihakKetiga }}
-                            </td>
-
-                            <td class="cell-text">
-                                {{ $jenisTuntutanPihakKetiga }}
                             </td>
 
                             <td>
@@ -733,33 +755,41 @@
     }
 
     .user-table th:nth-child(3),
-    .user-table td:nth-child(3),
-    .user-table th:nth-child(5),
-    .user-table td:nth-child(5) {
+    .user-table td:nth-child(3) {
+        width: 230px !important;
+        min-width: 230px;
+        max-width: 230px;
+        white-space: normal;
+    }
+
+    .user-table th:nth-child(4),
+    .user-table td:nth-child(4),
+    .user-table th:nth-child(6),
+    .user-table td:nth-child(6) {
         width: 150px !important;
         min-width: 150px;
         max-width: 150px;
         white-space: nowrap;
     }
 
-    .user-table th:nth-child(4),
-    .user-table td:nth-child(4) {
+    .user-table th:nth-child(5),
+    .user-table td:nth-child(5) {
         width: 130px !important;
         min-width: 130px;
         max-width: 130px;
         white-space: nowrap;
     }
 
-    .user-table th:nth-child(6),
-    .user-table td:nth-child(6) {
+    .user-table th:nth-child(7),
+    .user-table td:nth-child(7) {
         width: 180px !important;
         min-width: 180px;
         max-width: 180px;
         white-space: normal;
     }
 
-    .user-table th:nth-child(7),
-    .user-table td:nth-child(7) {
+    .user-table th:nth-child(8),
+    .user-table td:nth-child(8) {
         width: 120px !important;
         min-width: 120px;
         max-width: 120px;
@@ -767,19 +797,11 @@
         white-space: nowrap;
     }
 
-    .user-table th:nth-child(8),
-    .user-table td:nth-child(8) {
+    .user-table th:nth-child(9),
+    .user-table td:nth-child(9) {
         width: 280px !important;
         min-width: 280px;
         max-width: 280px;
-        white-space: normal;
-    }
-
-    .user-table th:nth-child(9),
-    .user-table td:nth-child(9) {
-        width: 180px !important;
-        min-width: 180px;
-        max-width: 180px;
         white-space: normal;
     }
 
@@ -788,24 +810,23 @@
         width: 180px !important;
         min-width: 180px;
         max-width: 180px;
-        white-space: nowrap;
+        white-space: normal;
     }
 
     .user-table th:nth-child(11),
     .user-table td:nth-child(11) {
-        width: 250px !important;
-        min-width: 250px;
-        max-width: 250px;
-        white-space: normal;
+        width: 180px !important;
+        min-width: 180px;
+        max-width: 180px;
+        white-space: nowrap;
     }
 
     .user-table th:nth-child(12),
     .user-table td:nth-child(12) {
-        width: 170px !important;
-        min-width: 170px;
-        max-width: 170px;
-        text-align: center;
-        white-space: nowrap;
+        width: 250px !important;
+        min-width: 250px;
+        max-width: 250px;
+        white-space: normal;
     }
 
     .user-table th:nth-child(13),
@@ -1067,6 +1088,7 @@ $(document).ready(function () {
         columns: [
             { width: '60px' },
             { width: '90px' },
+            { width: '230px' },
             { width: '150px' },
             { width: '130px' },
             { width: '150px' },
@@ -1076,7 +1098,6 @@ $(document).ready(function () {
             { width: '180px' },
             { width: '180px' },
             { width: '250px' },
-            { width: '230px' },
             { width: '170px' },
             { width: '130px', orderable: false },
             { width: '130px', orderable: false }
@@ -1100,6 +1121,11 @@ $(document).ready(function () {
         initComplete: function () {
             this.api().columns.adjust();
         }
+    });
+
+    $('#filterJenisTuntutan').on('change', function () {
+        const val = $.fn.dataTable.util.escapeRegex(this.value);
+        kemalanganTable.column(2).search(val ? '^' + val + '$' : '', true, false).draw();
     });
 
     setTimeout(function () {

@@ -81,6 +81,12 @@
                 <thead>
                     <tr>
                         <th>Bil</th>
+                        <th class="text-center">
+                            <div class="flex items-center justify-center gap-2">
+                                <input type="checkbox" id="checkAllVehicles">
+                                <span>Pilih</span>
+                            </div>
+                        </th>
                         <th>No Plat</th>
                         <th>Jenis Kenderaan</th>
                         <th>Jabatan</th>
@@ -90,12 +96,6 @@
                         <th>Tarikh Tamat Cukai Jalan</th>
                         <th>Tarikh Tamat Insurans</th>
                         <th>Status</th>
-                        <th class="text-center">
-                            <div class="flex items-center justify-center gap-2">
-                                <input type="checkbox" id="checkAllVehicles">
-                                <span>Pilih</span>
-                            </div>
-                        </th>
                     </tr>
                 </thead>
 
@@ -117,6 +117,13 @@
                 
                         <tr>
                             <td>{{ $index + 1 }}</td>
+                            <td class="text-center">
+                                <input type="checkbox"
+                                    class="vehicle-checkbox"
+                                    name="vehicle_ids[]"
+                                    value="{{ $car->id }}"
+                                    data-plate="{{ $car->no_plat }}">
+                            </td>
                             <td class="font-semibold">{{ $noPlat }}</td>
                             <td>{{ $car->jenis_kenderaan ?? '-' }}</td>
                             <td>{{ $car->jabatan ?? '-' }}</td>
@@ -129,13 +136,6 @@
                                 <span class="status-badge {{ $statusClass }}">
                                     {{ $roadtaxStatus }}
                                 </span>
-                            </td>
-                            <td class="text-center">
-                                <input type="checkbox"
-                                    class="vehicle-checkbox"
-                                    name="vehicle_ids[]"
-                                    value="{{ $car->id }}"
-                                    data-plate="{{ $car->no_plat }}">
                             </td>
                         </tr>
                     @endforeach
@@ -367,6 +367,7 @@ $(document).ready(function () {
 
         columns: [
             { width: '60px' },                         // Bil
+            { width: '110px', orderable: false },      // Pilih
             { width: '130px' },                        // No Plat
             { width: '190px' },                        // Jenis Kenderaan
             { width: '300px' },                        // Jabatan
@@ -375,8 +376,7 @@ $(document).ready(function () {
             { width: '190px' },                        // Tarikh Mula
             { width: '190px' },                        // Tarikh Tamat
             { width: '190px' },                        // Tarikh Tamat
-            { width: '170px' },                        // Status
-            { width: '110px', orderable: false }       // Pilih
+            { width: '170px' }                         // Status
         ],
 
         language: {

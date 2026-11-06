@@ -303,6 +303,7 @@ Route::middleware(['check.login', 'nocache'])->group(function () {
     Route::get('/mahkamah-kes/{id}/file', [MahkamahController::class, 'mahkamahKesFile'])->name('mahkamah-kes-file');
 
     // SIDEMENU CUKAI JALAN DAN INSURANS - LUPUS KENDERAAN
+    Route::get('/kenderaan-tak-aktif-list', [KenderaanController::class, 'inactiveCarList'])->name('kenderaan-tak-aktif-list');
     Route::get('/lupus-car-list', [LupusController::class, 'lupusCarList'])->name('lupus-car-list');
     Route::get('/lupus-car-export', [LupusController::class, 'exportLupusCarList'])->name('lupus-car-export');
     Route::get('/lupus-car/{id}/edit', [LupusController::class, 'lupusCarEdit'])->name('lupus-car-edit');

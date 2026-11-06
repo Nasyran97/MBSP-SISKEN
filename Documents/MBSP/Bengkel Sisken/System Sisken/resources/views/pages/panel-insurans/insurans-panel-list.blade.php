@@ -26,6 +26,7 @@
                         <th>Bil</th>
                         <th>Nama Panel</th>
                         <th>Status</th>
+                        <th>Default</th>
                         <th class="text-center">Action</th>
                     </tr>
                 </thead>
@@ -36,6 +37,7 @@
                             $id = $panel->ID ?? $panel->id;
                             $panelName = $panel->PANEL_NAME ?? $panel->panel_name ?? '-';
                             $status = strtoupper(trim($panel->STATUS_DATA ?? $panel->status_data ?? ''));
+                            $isDefault = strtoupper(trim($panelName)) === strtoupper($defaultPanel);
 
                             $statusClass = match($status) {
                                 'ACTIVE' => 'status-active',
@@ -56,6 +58,14 @@
                                 <span class="status-badge {{ $statusClass }}">
                                     {{ $status ?: '-' }}
                                 </span>
+                            </td>
+
+                            <td>
+                                @if($isDefault)
+                                    <span class="status-badge status-active">Default</span>
+                                @else
+                                    -
+                                @endif
                             </td>
 
                             <td class="text-center">
@@ -94,7 +104,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="4" class="text-center py-4 text-gray-500">
+                            <td colspan="5" class="text-center py-4 text-gray-500">
                                 Tiada data panel insurans.
                             </td>
                         </tr>
@@ -166,7 +176,9 @@
     }
 
     .user-table th:nth-child(4),
-    .user-table td:nth-child(4) {
+    .user-table td:nth-child(4),
+    .user-table th:nth-child(5),
+    .user-table td:nth-child(5) {
         width: 120px !important;
         min-width: 120px;
         max-width: 120px;
@@ -279,6 +291,7 @@ $(document).ready(function () {
             { width: '70px' },
             { width: '330px' },
             { width: '130px' },
+            { width: '120px' },
             { width: '120px', orderable: false }
         ],
 

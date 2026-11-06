@@ -5,9 +5,10 @@
     <div class="flex items-center justify-between mb-4">
         <div>
             <h3 class="text-3xl font-bold text-gray-900">{{ $title }}</h3>
-            <p class="mt-1 text-sm text-gray-500">Senarai maklumat kenderaan.</p>
+            <p class="mt-1 text-sm text-gray-500">{{ $subtitle ?? 'Senarai maklumat kenderaan.' }}</p>
         </div>
 
+        @unless($inactiveOnly ?? false)
         <div class="flex items-center gap-3">
             <a href="{{ route('rekod-car-export') }}"
                class="inline-flex items-center justify-center rounded-lg bg-emerald-600 px-5 py-3 text-sm font-medium text-white shadow-theme-xs hover:bg-emerald-700">
@@ -19,9 +20,35 @@
                 + Tambah Kenderaan
             </a>
         </div>
+        @endunless
     </div>
 
-    <x-common.component-card title="Senarai Kenderaan">
+    @php
+        $jabatanOptions = $cars->map(fn ($c) => trim($c->JABATAN ?? $c->jabatan ?? ''))->filter()->unique()->sort()->values();
+        $lokasiOptions = $cars->map(fn ($c) => trim($c->LOKASI_PENEMPATAN ?? $c->lokasi_penempatan ?? ''))->filter()->unique()->sort()->values();
+    @endphp
+
+    <x-common.component-card :title="$title">
+        <div class="grid grid-cols-1 gap-4 p-1 mb-4 md:grid-cols-2">
+            <div>
+                <label for="filterJabatan" class="block mb-1 text-sm font-medium text-gray-700">Jabatan</label>
+                <select id="filterJabatan" placeholder="Semua Jabatan">
+                    <option value="">Semua Jabatan</option>
+                    @foreach($jabatanOptions as $opt)
+                        <option value="{{ $opt }}">{{ $opt }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="filterLokasi" class="block mb-1 text-sm font-medium text-gray-700">Lokasi Penempatan</label>
+                <select id="filterLokasi" placeholder="Semua Lokasi">
+                    <option value="">Semua Lokasi</option>
+                    @foreach($lokasiOptions as $opt)
+                        <option value="{{ $opt }}">{{ $opt }}</option>
+                    @endforeach
+                </select>
+            </div>
+        </div>
         <div class="p-1 overflow-x-auto">
             <table id="rekodCarTable" class="user-table rekod-car-table">
                 <thead>
@@ -59,7 +86,8 @@
                             $cnFile = $car->CN_FILE ?? $car->cn_file ?? null;
                         @endphp
 
-                        <tr>
+                        <tr data-jabatan="{{ trim($car->JABATAN ?? $car->jabatan ?? '') }}"
+                            data-lokasi="{{ trim($car->LOKASI_PENEMPATAN ?? $car->lokasi_penempatan ?? '') }}">
                             <td>{{ $index + 1 }}</td>
 
                             <td class="font-semibold">
@@ -1002,6 +1030,35 @@ $(document).ready(function () {
             this.api().columns.adjust();
         }
     });
+
+    const tomOptions = {
+        allowEmptyOption: true,
+        create: false,
+        maxOptions: null,
+        plugins: ['dropdown_input', 'clear_button'],
+        sortField: { field: '$order' }
+    };
+
+    const filterJabatan = new TomSelect('#filterJabatan', { ...tomOptions, placeholder: 'Cari / pilih jabatan...' });
+    const filterLokasi = new TomSelect('#filterLokasi', { ...tomOptions, placeholder: 'Cari / pilih lokasi...' });
+
+    $.fn.dataTable.ext.search = $.fn.dataTable.ext.search.filter(fn => !fn.isRekodCarFilter);
+
+    const rekodCarFilter = function (settings, data, dataIndex) {
+        if (settings.nTable.id !== 'rekodCarTable') return true;
+
+        const tr = settings.aoData[dataIndex].nTr;
+        const jabatan = filterJabatan.getValue();
+        const lokasi = filterLokasi.getValue();
+
+        return (!jabatan || tr.dataset.jabatan === jabatan)
+            && (!lokasi || tr.dataset.lokasi === lokasi);
+    };
+    rekodCarFilter.isRekodCarFilter = true;
+    $.fn.dataTable.ext.search.push(rekodCarFilter);
+
+    filterJabatan.on('change', function () { rekodCarTable.draw(); });
+    filterLokasi.on('change', function () { rekodCarTable.draw(); });
 
     setTimeout(function () {
         rekodCarTable.columns.adjust().draw(false);

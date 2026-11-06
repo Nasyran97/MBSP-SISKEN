@@ -406,19 +406,20 @@ class InsuransStatistikController extends Controller
         |--------------------------------------------------------------------------
         */
         $jenisTuntutanPihakKetigaByYear = DB::connection('oracle')
-            ->table('VEHICLE_KEMALANGAN')
+            ->table('VEHICLE_KEMALANGAN as vk')
+            ->leftJoin('TUNTUTAN_PIHAK_KETIGA as tpk', 'tpk.ID', '=', 'vk.TUNTUTAN_PIHAK_KETIGA_ID')
             ->select(
-                DB::raw("TO_CHAR(TARIKH_KEMALANGAN, 'YYYY') as \"TAHUN\""),
-                DB::raw("NVL(NULLIF(TRIM(UPPER(JENIS_TUNTUTAN_PIHAK_KETIGA)), ''), 'TIDAK DINYATAKAN') as \"LABEL\""),
+                DB::raw("TO_CHAR(vk.TARIKH_KEMALANGAN, 'YYYY') as \"TAHUN\""),
+                DB::raw("NVL(NULLIF(TRIM(UPPER(NVL(tpk.TUNTUTAN_PIHAK_KETIGA_NAME, vk.JENIS_TUNTUTAN_PIHAK_KETIGA))), ''), 'TIDAK DINYATAKAN') as \"LABEL\""),
                 DB::raw('COUNT(*) as "JUMLAH"')
             )
-            ->whereRaw("(UPPER(STATUS_DATA) = 'ACTIVE' OR STATUS_DATA IS NULL)")
-            ->whereNotNull('TARIKH_KEMALANGAN')
+            ->whereRaw("(UPPER(vk.STATUS_DATA) = 'ACTIVE' OR vk.STATUS_DATA IS NULL)")
+            ->whereNotNull('vk.TARIKH_KEMALANGAN')
             ->groupBy(
-                DB::raw("TO_CHAR(TARIKH_KEMALANGAN, 'YYYY')"),
-                DB::raw("NVL(NULLIF(TRIM(UPPER(JENIS_TUNTUTAN_PIHAK_KETIGA)), ''), 'TIDAK DINYATAKAN')")
+                DB::raw("TO_CHAR(vk.TARIKH_KEMALANGAN, 'YYYY')"),
+                DB::raw("NVL(NULLIF(TRIM(UPPER(NVL(tpk.TUNTUTAN_PIHAK_KETIGA_NAME, vk.JENIS_TUNTUTAN_PIHAK_KETIGA))), ''), 'TIDAK DINYATAKAN')")
             )
-            ->orderBy(DB::raw("TO_CHAR(TARIKH_KEMALANGAN, 'YYYY')"))
+            ->orderBy(DB::raw("TO_CHAR(vk.TARIKH_KEMALANGAN, 'YYYY')"))
             ->get();
 
         [$jenisTuntutanPihakKetigaYearLabels, $jenisTuntutanPihakKetigaYearDatasets] = $buildYearDatasets($jenisTuntutanPihakKetigaByYear);

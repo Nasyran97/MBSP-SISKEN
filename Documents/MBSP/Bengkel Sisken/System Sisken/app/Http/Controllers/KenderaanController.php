@@ -46,7 +46,7 @@ class KenderaanController extends Controller
         }
     }
 
-    private function getCarList()
+    private function getCarList(array $statuses = ['ACTIVE', 'INACTIVE'])
     {
         return DB::connection('oracle')
             ->table('VEHICLE as v')
@@ -93,7 +93,7 @@ class KenderaanController extends Controller
                 DB::raw('u.NAMA as "PENGAWAS_KENDERAAN"'),
                 DB::raw('u.NOSTAFF as "PENGAWAS_NOSTAFF"')
             )
-            ->whereRaw("UPPER(v.STATUS_DATA) IN ('ACTIVE', 'INACTIVE')")
+            ->whereIn(DB::raw('UPPER(v.STATUS_DATA)'), $statuses)
             ->orderBy('v.ID', 'DESC')
             ->get();
     }
@@ -107,6 +107,18 @@ class KenderaanController extends Controller
         return view('pages.kenderaan.rekod-car-list', [
             'title' => 'Senarai Kenderaan',
             'cars' => $cars,
+        ]);
+    }
+
+    public function inactiveCarList()
+    {
+        $this->checkCarListAccess();
+
+        return view('pages.kenderaan.rekod-car-list', [
+            'title' => 'Senarai Kenderaan Tak Aktif',
+            'subtitle' => 'Senarai kenderaan berstatus tak aktif.',
+            'inactiveOnly' => true,
+            'cars' => $this->getCarList(['INACTIVE']),
         ]);
     }
 

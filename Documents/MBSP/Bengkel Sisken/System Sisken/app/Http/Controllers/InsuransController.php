@@ -15,6 +15,8 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class InsuransController extends Controller
 {
+    private const DEFAULT_PANEL = 'Etiqa General Insurance Berhad';
+
     public function polisiList()
     {
         $today = now('Asia/Kuala_Lumpur')->startOfDay();
@@ -413,6 +415,7 @@ class InsuransController extends Controller
         $tuntutanPihakKetiga = DB::connection('oracle')
             ->table('TUNTUTAN_PIHAK_KETIGA')
             ->select(
+                DB::raw('ID as "ID"'),
                 DB::raw('TUNTUTAN_PIHAK_KETIGA_NAME as "TUNTUTAN_PIHAK_KETIGA_NAME"')
             )
             ->whereRaw("(UPPER(STATUS_DATA) = 'ACTIVE' OR STATUS_DATA IS NULL)")
@@ -507,12 +510,14 @@ class InsuransController extends Controller
     {
         $panels = DB::connection('oracle')
         ->table('INSURANS_PANEL')
+            ->orderByRaw("CASE WHEN UPPER(TRIM(PANEL_NAME)) = ? THEN 0 ELSE 1 END", [strtoupper(self::DEFAULT_PANEL)])
             ->orderBy('PANEL_NAME')
             ->get();
 
         return view('pages.panel-insurans.insurans-panel-list', [
             'title' => 'Senarai Panel Insurans',
-            'panels' => $panels
+            'panels' => $panels,
+            'defaultPanel' => self::DEFAULT_PANEL,
         ]);
     }
 
@@ -626,7 +631,7 @@ class InsuransController extends Controller
             'no_plat_pihak_ketiga' => 'nullable|string|max:50',
             'jenis_kenderaan_pihak_ketiga' => 'nullable|string|max:255',
             'kerosakan_pihak_ketiga' => 'nullable|string',
-            'jenis_tuntutan_pihak_ketiga' => 'nullable|string|max:100',
+            'jenis_tuntutan_pihak_ketiga' => 'nullable|integer',
             'no_telefon_pihak_ketiga' => 'nullable|string|max:50',
 
             'tarikh_hantar_kes' => 'nullable|date',
@@ -724,7 +729,7 @@ class InsuransController extends Controller
                 'NO_PLAT_PIHAK_KETIGA'          => $request->no_plat_pihak_ketiga,
                 'JENIS_KENDERAAN_PIHAK_KETIGA'  => $request->jenis_kenderaan_pihak_ketiga,
                 'KEROSAKAN_PIHAK_KETIGA'        => $request->kerosakan_pihak_ketiga,
-                'JENIS_TUNTUTAN_PIHAK_KETIGA'   => $request->jenis_tuntutan_pihak_ketiga,
+                'TUNTUTAN_PIHAK_KETIGA_ID'      => $request->jenis_tuntutan_pihak_ketiga ?: null,
                 'NO_TELEFON_PIHAK_KETIGA'       => $request->no_telefon_pihak_ketiga,
 
                 'TARIKH_HANTAR_KES'             => $request->tarikh_hantar_kes,
@@ -750,6 +755,7 @@ class InsuransController extends Controller
         $kemalangan = DB::connection('oracle')
             ->table('VEHICLE_KEMALANGAN as vk')
             ->leftJoin('VEHICLE as v', 'v.ID', '=', 'vk.VEHICLE_ID')
+            ->leftJoin('TUNTUTAN_PIHAK_KETIGA as tpk', 'tpk.ID', '=', 'vk.TUNTUTAN_PIHAK_KETIGA_ID')
             ->select(
                 DB::raw('vk.ID as "ID"'),
                 DB::raw('vk.VEHICLE_ID as "VEHICLE_ID"'),
@@ -785,7 +791,8 @@ class InsuransController extends Controller
                 DB::raw('vk.NO_PLAT_PIHAK_KETIGA as "NO_PLAT_PIHAK_KETIGA"'),
                 DB::raw('vk.JENIS_KENDERAAN_PIHAK_KETIGA as "JENIS_KENDERAAN_PIHAK_KETIGA"'),
                 DB::raw('vk.KEROSAKAN_PIHAK_KETIGA as "KEROSAKAN_PIHAK_KETIGA"'),
-                DB::raw('vk.JENIS_TUNTUTAN_PIHAK_KETIGA as "JENIS_TUNTUTAN_PIHAK_KETIGA"'),
+                DB::raw('vk.TUNTUTAN_PIHAK_KETIGA_ID as "TUNTUTAN_PIHAK_KETIGA_ID"'),
+                DB::raw('NVL(tpk.TUNTUTAN_PIHAK_KETIGA_NAME, vk.JENIS_TUNTUTAN_PIHAK_KETIGA) as "JENIS_TUNTUTAN_PIHAK_KETIGA"'),
                 DB::raw('vk.NO_TELEFON_PIHAK_KETIGA as "NO_TELEFON_PIHAK_KETIGA"'),
                 DB::raw('vk.TARIKH_HANTAR_KES as "TARIKH_HANTAR_KES"'),
                 DB::raw('vk.TUNTUTAN_GANTIRUGI as "TUNTUTAN_GANTIRUGI"'),
@@ -890,6 +897,7 @@ class InsuransController extends Controller
         $gantirugi = DB::connection('oracle')
             ->table('VEHICLE_KEMALANGAN as vk')
             ->leftJoin('VEHICLE as v', 'v.ID', '=', 'vk.VEHICLE_ID')
+            ->leftJoin('TUNTUTAN_PIHAK_KETIGA as tpk', 'tpk.ID', '=', 'vk.TUNTUTAN_PIHAK_KETIGA_ID')
             ->select(
                 DB::raw('vk.ID as "ID"'),
                 DB::raw('vk.VEHICLE_ID as "VEHICLE_ID"'),
@@ -924,7 +932,8 @@ class InsuransController extends Controller
                 DB::raw('vk.NO_PLAT_PIHAK_KETIGA as "NO_PLAT_PIHAK_KETIGA"'),
                 DB::raw('vk.JENIS_KENDERAAN_PIHAK_KETIGA as "JENIS_KENDERAAN_PIHAK_KETIGA"'),
                 DB::raw('vk.KEROSAKAN_PIHAK_KETIGA as "KEROSAKAN_PIHAK_KETIGA"'),
-                DB::raw('vk.JENIS_TUNTUTAN_PIHAK_KETIGA as "JENIS_TUNTUTAN_PIHAK_KETIGA"'),
+                DB::raw('vk.TUNTUTAN_PIHAK_KETIGA_ID as "TUNTUTAN_PIHAK_KETIGA_ID"'),
+                DB::raw('NVL(tpk.TUNTUTAN_PIHAK_KETIGA_NAME, vk.JENIS_TUNTUTAN_PIHAK_KETIGA) as "JENIS_TUNTUTAN_PIHAK_KETIGA"'),
                 DB::raw('vk.NO_TELEFON_PIHAK_KETIGA as "NO_TELEFON_PIHAK_KETIGA"'),
 
                 DB::raw('vk.TARIKH_HANTAR_KES as "TARIKH_HANTAR_KES"'),
@@ -993,6 +1002,7 @@ class InsuransController extends Controller
         $repair = DB::connection('oracle')
             ->table('VEHICLE_KEMALANGAN as vk')
             ->leftJoin('VEHICLE as v', 'v.ID', '=', 'vk.VEHICLE_ID')
+            ->leftJoin('TUNTUTAN_PIHAK_KETIGA as tpk', 'tpk.ID', '=', 'vk.TUNTUTAN_PIHAK_KETIGA_ID')
             ->select(
                 DB::raw('vk.ID as "ID"'),
                 DB::raw('vk.VEHICLE_ID as "VEHICLE_ID"'),
@@ -1027,7 +1037,8 @@ class InsuransController extends Controller
                 DB::raw('vk.NO_PLAT_PIHAK_KETIGA as "NO_PLAT_PIHAK_KETIGA"'),
                 DB::raw('vk.JENIS_KENDERAAN_PIHAK_KETIGA as "JENIS_KENDERAAN_PIHAK_KETIGA"'),
                 DB::raw('vk.KEROSAKAN_PIHAK_KETIGA as "KEROSAKAN_PIHAK_KETIGA"'),
-                DB::raw('vk.JENIS_TUNTUTAN_PIHAK_KETIGA as "JENIS_TUNTUTAN_PIHAK_KETIGA"'),
+                DB::raw('vk.TUNTUTAN_PIHAK_KETIGA_ID as "TUNTUTAN_PIHAK_KETIGA_ID"'),
+                DB::raw('NVL(tpk.TUNTUTAN_PIHAK_KETIGA_NAME, vk.JENIS_TUNTUTAN_PIHAK_KETIGA) as "JENIS_TUNTUTAN_PIHAK_KETIGA"'),
                 DB::raw('vk.NO_TELEFON_PIHAK_KETIGA as "NO_TELEFON_PIHAK_KETIGA"'),
 
                 DB::raw('vk.TARIKH_HANTAR_KES as "TARIKH_HANTAR_KES"'),

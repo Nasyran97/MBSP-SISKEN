@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\UserLog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -122,6 +123,8 @@ class LoginController extends Controller
         ]);
 
         $request->session()->save();
+
+        UserLog::auth('LOGIN', $user->id, $user->nostaff, $staffData['NAMASTAFF'] ?? $user->nama);
 
         $modules = [];
         $moduleRole = json_decode($user->MODULE_ROLE ?? $user->module_role ?? '[]', true);
@@ -291,6 +294,10 @@ class LoginController extends Controller
 
     public function logout(Request $request)
     {
+        if (session('user_id')) {
+            UserLog::auth('LOGOUT', session('user_id'), session('nostaff'), session('nama'));
+        }
+
         $request->session()->forget([
             'user_id',
             'nostaff',

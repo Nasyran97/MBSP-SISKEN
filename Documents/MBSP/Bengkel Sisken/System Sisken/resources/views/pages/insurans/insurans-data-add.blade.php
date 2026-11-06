@@ -390,10 +390,11 @@
                             @foreach($tuntutanPihakKetiga as $row)
                                 @php
                                     $tuntutanName = $row->TUNTUTAN_PIHAK_KETIGA_NAME ?? $row->tuntutan_pihak_ketiga_name ?? '';
+                                    $tuntutanId = $row->ID ?? $row->id ?? '';
                                 @endphp
 
-                                <option value="{{ $tuntutanName }}"
-                                    {{ old('jenis_tuntutan_pihak_ketiga') == $tuntutanName ? 'selected' : '' }}>
+                                <option value="{{ $tuntutanId }}"
+                                    {{ (string) old('jenis_tuntutan_pihak_ketiga') === (string) $tuntutanId ? 'selected' : '' }}>
                                     {{ $tuntutanName }}
                                 </option>
                             @endforeach
